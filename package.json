@@ -1,0 +1,13 @@
+{
+  "name": "project",
+  "version": "1.0.0",
+  "description": "projecte TFG",
+  "main": "server.js",
+  "author": "Ferran Diaz",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.14.2",
+    "express": "^4.13.3",
+    "pkgcloud": "^1.1.0"
+  }
+}
