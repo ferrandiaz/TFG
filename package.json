@@ -8,6 +8,7 @@
   "dependencies": {
     "body-parser": "^1.14.2",
     "express": "^4.13.3",
-    "pkgcloud": "^1.1.0"
+    "pkgcloud": "^1.1.0",
+    "underscore": "^1.8.3"
   }
 }
