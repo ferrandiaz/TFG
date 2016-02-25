@@ -23,7 +23,7 @@ openstack.route('/server')
     .post(compute.createServer);
 openstack.route('/server/:hypervisor')
     .get(compute.getServer);
-openstack.route('/hosts')
+openstack.route('/meters')
     .get(compute.getHosts);
 
 app.use('/openstack',openstack);
@@ -34,42 +34,6 @@ app.use('/openstack',openstack);
 app.listen(3000, function(){
     console.log('Server Running Port 3000');
 
-/*
-
-   amqp.connect('amqp://guest:RABBIT_PASS@controller:5672').then(function(conn) {
-     process.once('SIGINT', function() { conn.close(); });
-  return conn.createChannel().then(function(ch) {
-    var ex = 'nova';
-    var ok = ch.assertExchange(ex, 'topic', {durable: false});
-
-    ok = ok.then(function() {
-      return ch.assertQueue('', {exclusive: true});
-    });
-
-    ok = ok.then(function(qok) {
-      var queue = qok.queue;
-      return all(keys.map(function(rk) {
-        console.log(rk);
-        ch.bindQueue(queue, ex, rk);
-      })).then(function() { return queue; });
-    });
-
-    ok = ok.then(function(queue) {
-      return ch.consume(queue, logMessage, {noAck: true});
-    });
-    return ok.then(function() {
-      console.log(' [*] Waiting for logs. To exit press CTRL+C.');
-    });
-
-    function logMessage(msg) {
-      console.log(" [x] %s:'%s'",
-                  msg.fields.routingKey,
-                  msg.content.toString());
-    }
-  });
-}).then(null, console.warn);
-
-*/
 function consumer(conn) {
   var ok = conn.createChannel(on_open);
     var ex = 'nova';

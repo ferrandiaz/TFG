@@ -1,6 +1,7 @@
 _ = require('underscore');
 var pkgcloud = require('pkgcloud');
 var hypervisors = require('../models/hypervisors.js');
+var telemetry = require('../models/telemetry.js');
 
 var compute = pkgcloud.compute.createClient({
     provider: 'openstack',
@@ -61,9 +62,11 @@ exports.getServer = function(req, res){
 }
 exports.getHosts = function (req,res) {
   console.log('Entro');
-  compute.getServer('f19db1b7-35bd-4980-b25b-233eebcef544',function(server){
-    console.log(server);
-    res.status(200).send(server);
+  console.log(hypervisors);
+  console.log(telemetry);
+  telemetry.getMeters(function(meters){
+    console.log(meters);
+    res.status(200).send(meters);
   })
 };
 
@@ -110,6 +113,7 @@ exports.createServer = function(req,res){
   })
 
 }
+
 
 
 function handleServerResponse(err, server) {
