@@ -13,6 +13,6 @@
     "request": "^2.67.0",
     "underscore": "^1.8.3",
     "simple-ssh": "~0.8.6",
-    "amqplib": "~0.4.0"
+    "amqplib": "~0.4.1"
   }
 }

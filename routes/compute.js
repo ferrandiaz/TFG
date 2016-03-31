@@ -7,7 +7,7 @@ var compute = pkgcloud.compute.createClient({
     provider: 'openstack',
     username: 'admin',
     password: 'telematica',
-    tenantId : '4677bc5239834f7d82ca26ba6729357b',
+    tenantId : '29f1fabbe7504b34a6fc1037793cbe52',
     region: 'regionOne',
     authUrl: 'http://controller:35357',
     strictSSL : false
