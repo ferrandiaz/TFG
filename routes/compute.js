@@ -1,6 +1,5 @@
 var _ = require('underscore');
 var async = require('async');
-
 var pkgcloud = require('pkgcloud');
 var hypervisors = require('../models/hypervisors.js');
 var telemetry = require('../models/telemetry.js');
@@ -32,7 +31,7 @@ exports.getServer = function (req, res) {
             if (hyperisorEnabled.state != 'up') callback(400);
             else callback(null, hyperisorEnabled);
         },
-        function (callback) {
+        function (hyperisorEnabled,callback) {
             hypervisors.getHypervisorInstances(req.params.hypervisor, function (hypervisor) {
                 callback(null, hypervisor);
             });
@@ -40,7 +39,7 @@ exports.getServer = function (req, res) {
         function (hypervisor, callback) {
             if (!hypervisor.servers) {
                 hypervisors.sleepHypervisor(hypervisor.hypervisor_hostname);
-                callback(200);
+                callback(200,'El hypervisor es posara a dormir');
             } else {
                 callback(null, hypervisor);
             }
@@ -117,16 +116,20 @@ exports.getServer = function (req, res) {
      }
      });*/
 };
-exports.getHosts = function (req, res) {
-    console.log('Entro');
-    console.log(hypervisors);
-    console.log(telemetry);
-    telemetry.getMeters(function (meters) {
-        console.log(meters);
-        res.status(200).send(meters);
+exports.getMeters = function (req, res) {
+    telemetry.getMeters(function (err,meters) {
+      if(err)res.status(err);
+      else res.status(200).send(meters);
     })
 };
 
+exports.getStatistics = function(req,res){
+  var meter = req.params.meter;
+  var resource = req.params.resource;
+  telemetry.getStatistics(meter, resource,function(err,statistics){
+    res.status(200).send(statistics);
+  });
+}
 
 exports.createServer = function (req, res) {
     var imagename = req.body.image;

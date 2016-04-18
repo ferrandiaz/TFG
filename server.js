@@ -24,7 +24,9 @@ openstack.route('/server')
 openstack.route('/server/:hypervisor')
     .get(compute.getServer);
 openstack.route('/meters')
-    .get(compute.getHosts);
+    .get(compute.getMeters);
+openstack.route('/meters/:meter/:resource')
+    .get(compute.getStatistics);
 
 app.use('/openstack', openstack);
 

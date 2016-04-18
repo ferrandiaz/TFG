@@ -15,7 +15,15 @@ exports.getMeters = function(callback){
   telemetry.getMeters(function(err,meters){
     if(err) callback(err);
     else{
-      callback(meters);
+      callback(null,meters);
     }
+  });
+}
+exports.getStatistics = function(meter, resource, callback){
+  var params = {};
+  params.meter = meter;
+  params.resourceID = resource;
+  telemetry.getStatistics(params,function(err,statistics){
+    callback(err,statistics);
   });
 }
