@@ -22,9 +22,3 @@ exports.getStatistics = function(req, res) {
     res.status(200).send(statistics);
   });
 }
-
-exports.alarmNotification = function(req, res) {
-  console.log(req.body);
-  console.log('ALARM NOTIFICATION');
-  res.status(200).send('OK');
-}

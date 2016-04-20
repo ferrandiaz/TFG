@@ -4,11 +4,13 @@ var self = require('../models/hypervisors.js');
 var pkgcloud = require('pkgcloud');
 var SSH = require('simple-ssh');
 var client = require('../config/config.js');
+var telemetry = require('../models/telemetry.js');
 
 //--- Variables Globals
 
 var freeVcpus = 0;
 var percent = 1;
+var relation = 2;
 
 /*--------------------------------*/
 
@@ -47,45 +49,51 @@ exports.hypervisorsList = function(callback) {
   });
 };
 
-exports.hypervisorAviable = function(flavor, callback) {
+exports.hypervisorsAviable = function(flavor, callback) {
+  var result = [];
   self.hypervisorsList(function(hypervisors) {
-    var result = _.find(hypervisors, function(hypervisor) {
-      if (hypervisor.state == 'up') {
-        async.parallel([
-          function(callback) {
-            if ((flavor.vcpus + hypervisor.vcpusUsed) < (
-                hypervisor.vcpus - freeVcpus)) {
-              callback(null);
-            } else callback(true);
-          },
-          function(callback) {
-            if ((flavor.ram + hypervisor.ramUsed) < (hypervisor.ramTotal *
-                percent)) {
-              callback(null);
-            } else callback(true);
-          },
-          function(callback) {
-            if ((flavor.disk + hypervisor.usedDisk) < (hypervisor
-                .totalDisk * percent)) {
-              callback(null);
-            } else callback(true);
-          }
-        ], function(err) {
-          if (!err) return hypervisor;
-        });
-
-      }
-
+    _.each(hypervisors, function(hypervisor) {
+      hypervisorParams(flavor, hypervisor, function(err, res) {
+        console.log(err, res);
+        if (!err) result.push(hypervisor);
+      });
     });
-    callback(result);
+    console.log(result);
+    if (_.isEmpty(result)) return callback(404);
+    else return callback(null, result);
   });
 };
+
+exports.hypervisorsAviableByCPU = function(flavor, callback) {
+  self.hypervisorsAviable(flavor, function(err, hypervisors) {
+    if (err) return callback(err);
+    async.each(
+      hypervisors,
+      function(hypervisor, cb) {
+        telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
+          2,
+          function(err, result) {
+            if (err) cb(err);
+            else {
+              hypervisor.cpuUsage = result[0].avg;
+              cb();
+            }
+          });
+      },
+      function(err) {
+        if (err) return callback(err);
+        else {
+          var sorted = _.sortBy(hypervisors, 'cpuUsage');
+          return callback(null, sorted);
+        }
+      });
+  });
+}
 
 exports.getAviablesExludeHypervisor = function(name, callback) {
   self.hypervisorsList(function(hypervisors) {
     var result = _.filter(hypervisors, function(hypervisor) {
       if (hypervisor.state == 'up') {
-        console.log(hypervisor.name, name);
         if (hypervisor.name != name) {
           return hypervisor;
         }
@@ -256,3 +264,32 @@ exports.getHost = function(hostName, callback) {
     else callback(hosts);
   });
 };
+
+function hypervisorParams(flavor, hypervisor, callback) {
+  if (hypervisor.state == 'up') {
+    async.parallel([
+      function(callback) {
+        if ((flavor.vcpus + hypervisor.vcpusUsed) <= (
+            hypervisor.vcpus * relation)) {
+          callback(null);
+        } else callback(true);
+      },
+      function(callback) {
+        if ((flavor.ram + hypervisor.ramUsed) <= (hypervisor.ramTotal *
+            relation)) {
+          callback(null);
+        } else callback(true);
+      },
+      function(callback) {
+        if ((flavor.disk + hypervisor.usedDisk) < (hypervisor
+            .totalDisk * relation)) {
+          callback(null);
+        } else callback(true);
+      }
+    ], function(err) {
+      if (!err) {
+        return callback(null, hypervisor);
+      } else return callback(err);
+    });
+  }
+}

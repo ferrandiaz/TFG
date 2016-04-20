@@ -4,6 +4,7 @@ var pkgcloud = require('pkgcloud');
 var hypervisors = require('../models/hypervisors.js');
 var telemetry = require('../models/telemetry.js');
 var client = require('../config/config.js');
+var alg = require('../algorithms/algorithms');
 
 
 var compute = pkgcloud.compute.createClient(client.options);
@@ -80,9 +81,29 @@ exports.getServer = function(req, res) {
   });
 };
 
-
+exports.sorted = function(req, res) {
+  var flavorname = req.params.flavor;
+  compute.getFlavors(function(err, flavors) {
+    if (err) res.status(500).send(err);
+    else {
+      var flavor = _.findWhere(flavors, {
+        name: flavorname
+      });
+      if (!flavor) res.status(400).send('Flavor not Found');
+      hypervisors.hypervisorsAviableByCPU(flavor, function(err, result) {
+        console.log(err, result);
+        res.status(200).send(result);
+      });
+    }
+  });
+}
 
 exports.createServer = function(req, res) {
+
+  /*  alg.createVM.createVM(req, function(err, result) {
+
+  });*/
+
   var imagename = req.body.image;
   var flavorname = req.body.flavor;
   var name = req.body.name;
@@ -101,7 +122,8 @@ exports.createServer = function(req, res) {
             name: flavorname
           });
           if (!flavor) res.status(400).send('Flavor not Found');
-          hypervisors.hypervisorAviable(flavor, function(hypervisor) {
+          hypervisors.hypervisorAviable(flavor, function(
+            hypervisor) {
             if (String(hypervisor) == 'undefined') {
               hypervisors.findHypervisorAviableDown(flavor,
                 function(hypervisorNoAviable) {
@@ -126,7 +148,8 @@ exports.createServer = function(req, res) {
                   image: image,
                   flavor: flavor,
                   networks: networks,
-                  hypervisor: "nova:" + hypervisorName
+                  hypervisor: "nova:" +
+                    hypervisorName
                 }, handleServerResponse);
                 callback(200);
               }, 10000);

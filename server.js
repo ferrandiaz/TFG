@@ -18,6 +18,7 @@ app.use(router);
 
 var compute = require('./routes/compute');
 var meters = require('./routes/meters');
+var alarm = require('./routes/alarm');
 var amqp = require('amqplib');
 var openstack = express.Router();
 
@@ -26,12 +27,14 @@ openstack.route('/server')
   .post(compute.createServer);
 openstack.route('/server/:hypervisor')
   .get(compute.getServer);
+openstack.route('/sorted/:flavor')
+  .get(compute.sorted);
 openstack.route('/meters')
   .get(meters.getMeters);
 openstack.route('/meters/:meter/:resource')
   .get(meters.getStatistics);
 openstack.route('/alarm')
-  .post(meters.alarmNotification);
+  .post(alarm.alarmNotification);
 app.use('/openstack', openstack);
 
 require('amqplib/callback_api')
@@ -55,11 +58,6 @@ function consumer(conn) {
     ch.consume(q, function(msg) {
       if (msg !== null) {
         var json = JSON.parse(msg.content.toString());
-        /*  console.log(
-            "======================================================");
-          console.log(json);
-          console.log(
-            "======================================================");*/
         _.each(json, function(ms) {
           var jMS = JSON.parse(ms);
           if (jMS.event_type === 'compute.instance.create.end') {
