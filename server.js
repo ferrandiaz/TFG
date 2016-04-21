@@ -15,11 +15,10 @@ app.get('/', function(req, res) {
 });
 app.use(router);
 
-
+var listener = require('./listener/listener');
 var compute = require('./routes/compute');
 var meters = require('./routes/meters');
 var alarm = require('./routes/alarm');
-var amqp = require('amqplib');
 var openstack = express.Router();
 
 openstack.route('/server')
@@ -37,41 +36,12 @@ openstack.route('/alarm')
   .post(alarm.alarmNotification);
 app.use('/openstack', openstack);
 
-require('amqplib/callback_api')
-  .connect('amqp://openstack:openstack@controller:5672//', function(err, conn) {
-    if (err != null) console.log(err);
-    consumer(conn);
-  });
-
-function consumer(conn) {
-  var ok = conn.createChannel(on_open);
-  var ex = 'nova';
-  var q = 'notificationsQueue';
-
-  function on_open(err, ch) {
-    if (err != null) console.log(err);
-    ch.assertExchange(ex, 'topic', {
-      durable: false
-    });
-    ch.assertQueue(q);
-    ch.bindQueue(q, ex, 'notifications.info');
-    ch.consume(q, function(msg) {
-      if (msg !== null) {
-        var json = JSON.parse(msg.content.toString());
-        _.each(json, function(ms) {
-          var jMS = JSON.parse(ms);
-          if (jMS.event_type === 'compute.instance.create.end') {
-            console.log('Created ' + jMS.event_type);
-          }
-          if (jMS.event_type === 'compute.instance.delete.end') {
-            console.log('Deleted ' + jMS.event_type);
-          }
-        });
-        ch.ack(msg);
-      }
-    });
-  }
-}
+listener.listener('notificationsQueue', function(err, msg) {
+  console.log("*****************************************************");
+  console.log('SERVER.JS MESSAGE');
+  console.log(msg);
+  console.log("*****************************************************");
+});
 
 app.listen(3000, function() {
   console.log('Server Running Port 3000');

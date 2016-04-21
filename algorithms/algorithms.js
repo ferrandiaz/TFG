@@ -1,1 +1,1 @@
-exports.createVM = require('./createVM');
+exports.createVM = require('./createVM').createVM;

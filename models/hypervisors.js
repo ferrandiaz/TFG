@@ -49,23 +49,8 @@ exports.hypervisorsList = function(callback) {
   });
 };
 
-exports.hypervisorsAviable = function(flavor, callback) {
-  var result = [];
-  self.hypervisorsList(function(hypervisors) {
-    _.each(hypervisors, function(hypervisor) {
-      hypervisorParams(flavor, hypervisor, function(err, res) {
-        console.log(err, res);
-        if (!err) result.push(hypervisor);
-      });
-    });
-    console.log(result);
-    if (_.isEmpty(result)) return callback(404);
-    else return callback(null, result);
-  });
-};
-
 exports.hypervisorsAviableByCPU = function(flavor, callback) {
-  self.hypervisorsAviable(flavor, function(err, hypervisors) {
+  self.findHypervisors(flavor, 'up', function(err, hypervisors) {
     if (err) return callback(err);
     async.each(
       hypervisors,
@@ -163,49 +148,18 @@ exports.findMigrateHypervisor = function(servers, name, callback) {
   });
 };
 
-exports.findHypervisorAviableDown = function(flavor, callback) {
+exports.findHypervisors = function(flavor, state, callback) {
+  var result = [];
   self.hypervisorsList(function(hypervisors) {
-    var result = _.find(hypervisors, function(hypervisor) {
-      if (hypervisor.state == 'down') {
-        async.parallel([
-          function(callback) {
-            if ((flavor.vcpus + hypervisor.vcpusUsed) <= (
-                hypervisor.vcpus - freeVcpus)) {
-              callback(null);
-            } else callback(true);
-          },
-          function(callback) {
-            if ((flavor.ram + hypervisor.ramUsed) <= (hypervisor.ramTotal *
-                percent)) {
-              callback(null);
-            } else callback(true);
-          },
-          function(callback) {
-            if ((flavor.disk + hypervisor.usedDisk) < (hypervisor
-                .totalDisk * percent)) {
-              callback(null);
-            } else callback(true);
-          }
-        ], function(err) {
-          if (!err) {
-            var ssh = new SSH({
-              host: hypervisor.name,
-              user: 'root',
-              pass: 'telematica'
-            });
-            ssh.exec('service nova-compute start', {
-              out: function(stdout) {
-                console.log(stdout);
-              }
-            }).start();
-            return hypervisor;
-          }
-        });
-      }
+    _.each(hypervisors, function(hypervisor) {
+      hypervisorParams(flavor, hypervisor, state, function(err, res) {
+        if (!err) result.push(hypervisor);
+      });
     });
-    callback(result);
+    if (_.isEmpty(result)) return callback(404);
+    else return callback(null, result);
   });
-};
+}
 
 exports.getHosts = function(callback) {
   compute.getHosts(function(err, hosts) {
@@ -230,6 +184,20 @@ exports.sleepHypervisor = function(hypervisor) {
   }).start();
   return true;
 };
+
+exports.awakeHypervisor = function(hypervisor, callback) {
+  var ssh = new SSH({
+    host: hypervisor,
+    user: 'root',
+    pass: 'telematica'
+  });
+  ssh.exec('service nova-compute start', {
+    out: function(stdout) {
+      console.log(stdout);
+    }
+  }).start();
+  return callback(null);
+}
 
 exports.getHypervisorInstances = function(hypervisor, callback) {
   compute.getHypervisorInstances(hypervisor, function(err, hypervisorInf) {
@@ -265,8 +233,8 @@ exports.getHost = function(hostName, callback) {
   });
 };
 
-function hypervisorParams(flavor, hypervisor, callback) {
-  if (hypervisor.state == 'up') {
+function hypervisorParams(flavor, hypervisor, state, callback) {
+  if (hypervisor.state == state) {
     async.parallel([
       function(callback) {
         if ((flavor.vcpus + hypervisor.vcpusUsed) <= (

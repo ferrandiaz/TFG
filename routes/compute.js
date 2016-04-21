@@ -99,66 +99,67 @@ exports.sorted = function(req, res) {
 }
 
 exports.createServer = function(req, res) {
+  alg.createVM(req.body, function(err, result) {
+    if (err) res.status(500).send(err.message);
+    else res.status(200).send(result.createServer);
+  });
+  /*
 
-  /*  alg.createVM.createVM(req, function(err, result) {
-
-  });*/
-
-  var imagename = req.body.image;
-  var flavorname = req.body.flavor;
-  var name = req.body.name;
-  var networks = req.body.networks;
-  compute.getImages(function(err, images) {
-    if (err) res.status(500).send(err);
-    else {
-      var image = _.findWhere(images, {
-        name: imagename
-      });
-      if (!image) res.status(400).send('Image not Found');
-      compute.getFlavors(function(err, flavors) {
-        if (err) res.status(500).send(err);
-        else {
-          var flavor = _.findWhere(flavors, {
-            name: flavorname
-          });
-          if (!flavor) res.status(400).send('Flavor not Found');
-          hypervisors.hypervisorAviable(flavor, function(
-            hypervisor) {
-            if (String(hypervisor) == 'undefined') {
-              hypervisors.findHypervisorAviableDown(flavor,
-                function(hypervisorNoAviable) {
-                  if (String(hypervisorNoAviable) ==
-                    'undefined') res.status(500).send(
-                    'No hi ha recursos suficients');
-                  else createServer(hypervisorNoAviable.name,
-                    function(response) {
-                      res.status(200).send(response)
-                    });
-                });
-            } else createServer(hypervisor.name, function(
-              response) {
-              res.status(200).send(response)
+    var imagename = req.body.image;
+    var flavorname = req.body.flavor;
+    var name = req.body.name;
+    var networks = req.body.networks;
+    compute.getImages(function(err, images) {
+      if (err) res.status(500).send(err);
+      else {
+        var image = _.findWhere(images, {
+          name: imagename
+        });
+        if (!image) res.status(400).send('Image not Found');
+        compute.getFlavors(function(err, flavors) {
+          if (err) res.status(500).send(err);
+          else {
+            var flavor = _.findWhere(flavors, {
+              name: flavorname
             });
+            if (!flavor) res.status(400).send('Flavor not Found');
+            hypervisors.hypervisorAviable(flavor, function(
+              hypervisor) {
+              if (String(hypervisor) == 'undefined') {
+                hypervisors.findHypervisorAviableDown(flavor,
+                  function(hypervisorNoAviable) {
+                    if (String(hypervisorNoAviable) ==
+                      'undefined') res.status(500).send(
+                      'No hi ha recursos suficients');
+                    else createServer(hypervisorNoAviable.name,
+                      function(response) {
+                        res.status(200).send(response)
+                      });
+                  });
+              } else createServer(hypervisor.name, function(
+                response) {
+                res.status(200).send(response)
+              });
 
-            function createServer(hypervisorName, callback) {
-              console.log(hypervisorName);
-              setTimeout(function() {
-                compute.createServer({
-                  name: name,
-                  image: image,
-                  flavor: flavor,
-                  networks: networks,
-                  hypervisor: "nova:" +
-                    hypervisorName
-                }, handleServerResponse);
-                callback(200);
-              }, 10000);
-            }
-          });
-        }
-      })
-    }
-  })
+              function createServer(hypervisorName, callback) {
+                console.log(hypervisorName);
+                setTimeout(function() {
+                  compute.createServer({
+                    name: name,
+                    image: image,
+                    flavor: flavor,
+                    networks: networks,
+                    hypervisor: "nova:" +
+                      hypervisorName
+                  }, handleServerResponse);
+                  callback(200);
+                }, 10000);
+              }
+            });
+          }
+        })
+      }
+    })*/
 
 };
 
