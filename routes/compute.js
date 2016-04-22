@@ -104,29 +104,3 @@ exports.createServer = function(req, res) {
     else res.status(200).send(result.createServer);
   });
 };
-
-
-function handleServerResponse(err, server) {
-  if (err) {
-    console.dir(err);
-    return;
-  }
-  console.log('SERVER : ' + server.name + ', waiting for active status');
-
-  // Wait for status: RUNNING on our server, and then callback
-  server.setWait({
-    status: server.STATUS.running
-  }, 5000, function(err) {
-    if (err) {
-      console.dir(err);
-      return;
-    }
-    console.log('SERVER INFO');
-    console.log(server.name);
-    console.log(server.status);
-    console.log(server.id);
-
-    console.log('Make sure you DELETE server: ' + server.id +
-      ' in order to not accrue billing charges');
-  });
-}
