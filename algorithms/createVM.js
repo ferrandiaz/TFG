@@ -5,6 +5,7 @@ var hypervisors = require('../models/hypervisors.js');
 var telemetry = require('../models/telemetry.js');
 var config = require('../config/config.js');
 var listener = require('../listener/listener');
+var ERROR = require('../errors/errors');
 var compute = pkgcloud.compute.createClient(config.options);
 
 exports.createVM = function(obj, callback) {
@@ -17,8 +18,7 @@ exports.createVM = function(obj, callback) {
       },
       hypervisors: ['validate', function(callback, result) {
         hypervisors.hypervisorsAviableByCPU(result.validate.flavor,
-          function(err,
-            hypervisors) {
+          function(err, hypervisors) {
             _.each(hypervisors, function(hypervisor) {
               if (hypervisor.cpuUsage >= config.maxCPU) {
                 var i = _.indexOf(hypervisors, hypervisor);
@@ -32,11 +32,9 @@ exports.createVM = function(obj, callback) {
       finalHypervisor: ['hypervisors', function(callback, result) {
         var hypervisor;
         if (!_.isUndefined(_.first(result.hypervisors))) {
-          console.log('NO EMPTY');
           hypervisor = _.first(result.hypervisors);
           callback(null, hypervisor);
         } else {
-          console.log('EMPTY');
           hypervisors.findHypervisors(result.validate.flavor, 'down',
             function(err, array) {
               if (err) callback(err);
@@ -61,13 +59,12 @@ exports.createVM = function(obj, callback) {
         serverParams.networks = obj.networks
         serverParams.hypervisor = 'nova:' + create.finalHypervisor.name;
         compute.createServer(serverParams, function(err, server) {
-          listener.listenerClose('startServerQueue', function(err,
-            msg) {
-
-            if (err) callback(err);
-            else callback(null, 'Server Created in Hypervisor ' +
-              create.finalHypervisor.name);
-          });
+          listener.listenerClose('startServerQueue',
+            function(err, msg) {
+              if (err) callback(err);
+              else callback(null, 'Server Created in Hypervisor ' +
+                create.finalHypervisor.name);
+            });
         });
       }]
     },
@@ -87,7 +84,7 @@ function validateParams(obj, callback) {
         var img = _.findWhere(images, {
           name: imageName
         });
-        if (!img) callback(400);
+        if (!img) callback(ERROR.imageNotFound);
         else callback(null, img);
       })
     },
@@ -98,7 +95,7 @@ function validateParams(obj, callback) {
         var flv = _.findWhere(flavors, {
           name: flavorName
         });
-        if (!flv) callback(400);
+        if (!flv) callback(ERROR.flavorNotFound);
         else callback(null, flv);
       });
     }

@@ -5,6 +5,7 @@ var pkgcloud = require('pkgcloud');
 var SSH = require('simple-ssh');
 var client = require('../config/config.js');
 var telemetry = require('../models/telemetry.js');
+var ERROR = require('../errors/errors');
 
 //--- Variables Globals
 
@@ -156,10 +157,8 @@ exports.findHypervisors = function(flavor, state, callback) {
         if (!err) result.push(hypervisor);
       });
     });
-    var error = {};
-    error.status = 404;
-    error.message = 'THERE ARE NO HYPERVISORS THAT CAN EXECUTE THE VM'
-    if (_.isEmpty(result)) return callback(error);
+
+    if (_.isEmpty(result)) return callback(ERROR.noHypervisorFound);
     else return callback(null, result);
   });
 }
