@@ -3,56 +3,58 @@ var async = require('async');
 var pkgcloud = require('pkgcloud');
 var hypervisors = require('../models/hypervisors.js');
 var telemetry = require('../models/telemetry.js');
-var client = require('../config/config.js');
+var config = require('../config/config.js');
 var listener = require('../listener/listener');
-var compute = pkgcloud.compute.createClient(client.options);
+var compute = pkgcloud.compute.createClient(config.options);
 
 exports.createVM = function(obj, callback) {
   async.auto({
       validate: function(callback) {
         validateParams(obj, function(err, result) {
-          console.log("========================================");
-          console.log('validateParams: ');
-          console.log("========================================");
           if (err) return callback(err);
           else callback(null, result);
         });
       },
       hypervisors: ['validate', function(callback, result) {
-        console.log("hypervisors");
-        console.log("==========================================");
-        hypervisors.findHypervisors(result.validate.flavor, 'up',
+        hypervisors.hypervisorsAviableByCPU(result.validate.flavor,
           function(err,
             hypervisors) {
+            _.each(hypervisors, function(hypervisor) {
+              if (hypervisor.cpuUsage >= config.maxCPU) {
+                var i = _.indexOf(hypervisors, hypervisor);
+                delete hypervisors[i];
+              }
+            });
             if (err) callback(null);
             else callback(null, hypervisors);
           });
       }],
-      finalHypervisor: ['hypervisors', function(callback, hypervisors) {
-        console.log("finalHypervisor");
-        console.log("==========================================");
+      finalHypervisor: ['hypervisors', function(callback, result) {
         var hypervisor;
-        if (!_.isEmpty(hypervisors.hypervisors)) {
-          hypervisor = _.first(hypervisors.hypervisors);
+        if (!_.isUndefined(_.first(result.hypervisors))) {
+          console.log('NO EMPTY');
+          hypervisor = _.first(result.hypervisors);
           callback(null, hypervisor);
         } else {
-          hypervisors.findHypervisors(validate.flavor, 'up', function(
-            err,
-            hypervisors) {
-            if (err) callback(err);
-            else {
-              hypervisor = _.first(hypervisors);
-              hypervisors.awakeHypervisor(hypervisor.name, function(
-                err, result) {
-                if (err) callback(err);
-                else callback(null, hypervisor);
-              })
-            }
-          });
+          console.log('EMPTY');
+          hypervisors.findHypervisors(result.validate.flavor, 'down',
+            function(err, array) {
+              if (err) callback(err);
+              else {
+                hypervisor = _.first(array);
+                console.log(hypervisor);
+                hypervisors.awakeHypervisor(hypervisor.name, function(
+                  err, awaked) {
+                  if (err) callback(err);
+                  else callback(null, hypervisor);
+                })
+              }
+            });
         }
       }],
       createServer: ['finalHypervisor', function(callback, create) {
         var serverParams = {};
+        console.log(create.finalHypervisor);
         serverParams.image = create.validate.image;
         serverParams.flavor = create.validate.flavor;
         serverParams.name = obj.name;
@@ -61,8 +63,10 @@ exports.createVM = function(obj, callback) {
         compute.createServer(serverParams, function(err, server) {
           listener.listenerClose('startServerQueue', function(err,
             msg) {
+
             if (err) callback(err);
-            else callback(null, msg);
+            else callback(null, 'Server Created in Hypervisor ' +
+              create.finalHypervisor.name);
           });
         });
       }]

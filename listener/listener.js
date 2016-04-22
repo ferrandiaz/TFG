@@ -6,7 +6,7 @@ exports.listenerClose = function(queue, callback) {
       connection) {
       async.auto({
         f1: function(callback) {
-          if (err != null) console.log(err);
+          if (err) callback(err);
           consumer(connection, queue, function(err, message) {
             return callback(null, message)
           });

@@ -156,7 +156,10 @@ exports.findHypervisors = function(flavor, state, callback) {
         if (!err) result.push(hypervisor);
       });
     });
-    if (_.isEmpty(result)) return callback(404);
+    var error = {};
+    error.status = 404;
+    error.message = 'THERE ARE NO HYPERVISORS THAT CAN EXECUTE THE VM'
+    if (_.isEmpty(result)) return callback(error);
     else return callback(null, result);
   });
 }
@@ -237,6 +240,10 @@ function hypervisorParams(flavor, hypervisor, state, callback) {
   if (hypervisor.state == state) {
     async.parallel([
       function(callback) {
+        if (flavor.vcpus > hypervisor.vcpus) callback(true);
+        else callback(null);
+      },
+      function(callback) {
         if ((flavor.vcpus + hypervisor.vcpusUsed) <= (
             hypervisor.vcpus * relation)) {
           callback(null);
@@ -250,7 +257,7 @@ function hypervisorParams(flavor, hypervisor, state, callback) {
       },
       function(callback) {
         if ((flavor.disk + hypervisor.usedDisk) < (hypervisor
-            .totalDisk * relation)) {
+            .totalDisk * percent)) {
           callback(null);
         } else callback(true);
       }

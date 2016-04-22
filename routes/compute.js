@@ -100,7 +100,7 @@ exports.sorted = function(req, res) {
 
 exports.createServer = function(req, res) {
   alg.createVM(req.body, function(err, result) {
-    if (err) res.status(500).send(err.message);
+    if (err) res.status(err.status).send(err.message);
     else res.status(200).send(result.createServer);
   });
   /*

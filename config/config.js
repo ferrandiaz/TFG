@@ -7,5 +7,6 @@
     authUrl: 'http://controller:35357',
     strictSSL: false
   }
-
+  exports.maxCPU = 60;
+  exports.minCPU = 10;
   exports.options = options;
