@@ -54,11 +54,9 @@ function consumer(conn, queue, callback) {
         _.each(json, function(ms) {
           var jMS = JSON.parse(ms);
           if (jMS.event_type === 'compute.instance.create.end') {
-            //  console.log('Created ' + jMS.event_type);
             return callback(null, jMS.event_type);
           }
           if (jMS.event_type === 'compute.instance.delete.end') {
-            //  console.log('Deleted ' + jMS.event_type);
             return callback(null, jMS.event_type);
           }
         });

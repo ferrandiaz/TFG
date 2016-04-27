@@ -17,7 +17,7 @@ exports.getMeters = function(req, res) {
 exports.getStatistics = function(req, res) {
   var meter = req.params.meter;
   var resource = req.params.resource;
-  var time = 10;
+  var time = 1;
   telemetry.getStatistics(meter, resource, time, function(err, statistics) {
     res.status(200).send(statistics);
   });

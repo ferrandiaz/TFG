@@ -64,9 +64,7 @@ exports.getServer = function(req, res) {
       _.each(migrateArray, function(migrate) {
         compute.migrateServer(migrate.server, migrate.newHypervisorName,
           function(resposta) {
-            console.log(resposta);
             k++;
-            console.log(k, migrateArray.length);
             if (k == migrateArray.length) {
               hypervisors.sleepHypervisor(hypervisor.hypervisor_hostname);
               callback(null, 'VM migrades, Hypervisor Apagat');
@@ -91,7 +89,7 @@ exports.sorted = function(req, res) {
       });
       if (!flavor) res.status(400).send('Flavor not Found');
       hypervisors.hypervisorsAviableByCPU(flavor, function(err, result) {
-        console.log(err, result);
+        if (err) res.status(err.status).send(err.message);
         res.status(200).send(result);
       });
     }

@@ -19,13 +19,10 @@ var compute = pkgcloud.compute.createClient(client.options);
 
 exports.hypervisorsList = function(callback) {
   compute.getHypervisors(function(err, hypervisors) {
-    //    console.log(hypervisors);
     if (err) {
-      console.log(err);
       callback(500, err);
     } else {
       var result = [];
-      //        console.log(hypervisors);
       _.each(hypervisors, function(json) {
         var push = {
           'id': json.id,
@@ -52,12 +49,13 @@ exports.hypervisorsList = function(callback) {
 
 exports.hypervisorsAviableByCPU = function(flavor, callback) {
   self.findHypervisors(flavor, 'up', function(err, hypervisors) {
+    console.log(err, hypervisors);
     if (err) return callback(err);
     async.each(
       hypervisors,
       function(hypervisor, cb) {
         telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
-          2,
+          1,
           function(err, result) {
             if (err) cb(err);
             else {
@@ -157,9 +155,9 @@ exports.findHypervisors = function(flavor, state, callback) {
         if (!err) result.push(hypervisor);
       });
     });
-
-    if (_.isEmpty(result)) return callback(ERROR.noHypervisorFound);
-    else return callback(null, result);
+    if (_.isEmpty(result)) {
+      return callback(ERROR.noHypervisorsFound);
+    } else return callback(null, result);
   });
 }
 
@@ -222,7 +220,6 @@ exports.getInfoServers = function(servers, callback) {
           'flavor': serverCmp.flavor.id
         };
         array.push(push);
-        console.log(array);
         if (i == servers.length) callback(array);
       });
     });
