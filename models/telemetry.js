@@ -13,6 +13,7 @@ exports.getMeters = function(callback) {
     }
   });
 }
+
 exports.getStatistics = function(meter, resource, time, callback) {
   var params = {};
   params.meter = meter;
@@ -21,4 +22,11 @@ exports.getStatistics = function(meter, resource, time, callback) {
   telemetry.getStatistics(params, function(err, statistics) {
     callback(err, statistics);
   });
+}
+
+exports.getAlarms = function(callback) {
+  telemetry.getAlarms(function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result);
+  })
 }

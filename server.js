@@ -33,6 +33,7 @@ openstack.route('/meters')
 openstack.route('/meters/:meter/:resource')
   .get(meters.getStatistics);
 openstack.route('/alarm')
+  .get(alarm.getAlarms)
   .post(alarm.alarmNotification);
 app.use('/openstack', openstack);
 

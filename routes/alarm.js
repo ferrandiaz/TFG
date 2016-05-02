@@ -10,3 +10,10 @@ exports.alarmNotification = function(req, res) {
   console.log('ALARM NOTIFICATION');
   res.status(200).send('OK');
 }
+
+exports.getAlarms = function(req, res) {
+  telemetry.getAlarms(function(err, message) {
+    console.log(err, message);
+    res.status(200).send(message);
+  })
+}
