@@ -5,6 +5,8 @@ var client = require('../config/config.js');
 
 var telemetry = pkgcloud.telemetry.createClient(client.options);
 
+//METERS
+
 exports.getMeters = function(callback) {
   telemetry.getMeters(function(err, meters) {
     if (err) callback(err);
@@ -24,9 +26,25 @@ exports.getStatistics = function(meter, resource, time, callback) {
   });
 }
 
+//ALARMS
+
 exports.getAlarms = function(callback) {
   telemetry.getAlarms(function(err, result) {
     if (err) return callback(err);
     else return callback(null, result);
   })
+}
+
+exports.deleteAlarm = function(alarm, callback) {
+  telemetry.deleteAlarm(alarm, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result);
+  });
+}
+
+exports.createAlarm = function(options, callback) {
+  telemetry.createAlarm(options, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result);
+  });
 }

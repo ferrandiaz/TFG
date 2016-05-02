@@ -16,6 +16,28 @@ exports.getServers = function(req, res) {
   });
 };
 
+exports.sleepServer = function(req, res) {
+  hypervisors.sleepHypervisor(req.params.hypervisor, function(err, result) {
+    console.log(err, result);
+    res.send(err);
+  });
+}
+
+exports.getHypervisorInstances = function(req, res) {
+  hypervisors.getHypervisorInstancesCpu(req.params.hypervisor, function(err,
+    result) {
+    if (err) res.status(500);
+    else res.status(200).send(result);
+  })
+}
+
+exports.testCpu = function(req, res) {
+  hypervisors.testCpu(function(err, result) {
+    console.log(err, result);
+    res.status(200).send(result);
+  })
+}
+
 exports.getServer = function(req, res) {
   async.waterfall([
     function(callback) {

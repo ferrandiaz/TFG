@@ -6,6 +6,7 @@ var SSH = require('simple-ssh');
 var client = require('../config/config.js');
 var telemetry = require('../models/telemetry.js');
 var ERROR = require('../errors/errors');
+var config = require('../config/config');
 
 //--- Variables Globals
 
@@ -49,11 +50,8 @@ exports.hypervisorsList = function(callback) {
 
 exports.hypervisorsAviableByCPU = function(flavor, callback) {
   self.findHypervisors(flavor, 'up', function(err, hypervisors) {
-    console.log(err, hypervisors);
     if (err) return callback(err);
-    async.each(
-      hypervisors,
-      function(hypervisor, cb) {
+    async.each(hypervisors, function(hypervisor, cb) {
         telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
           1,
           function(err, result) {
@@ -73,6 +71,110 @@ exports.hypervisorsAviableByCPU = function(flavor, callback) {
       });
   });
 }
+
+exports.getVMCPU = function(id, callback) {
+  telemetry.getStatistics('cpu_util', id, 60, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result[0].avg);
+  });
+}
+
+exports.getHypervisorInstancesCpu = function(hypervisor, callback) {
+  async.auto({
+    instances: function(callback) {
+      self.getHypervisorInstances(hypervisor, function(err, hypervisors) {
+        if (err) callback(err);
+        else callback(null, hypervisors.servers);
+      });
+    },
+    instanceInfo: ['instances', function(callback, instances) {
+      self.getInfoServers(instances.instances, function(err, result) {
+        if (err) callback(err);
+        else callback(null, result);
+      });
+    }],
+    cpu: ['instanceInfo', function(callback, instances) {
+      var array = [];
+      console.log(instances.instanceInfo);
+      async.each(instances.instanceInfo, function(instance, cb) {
+        self.getVMCPU(instance.id, function(err, cpu) {
+          if (err) cb(err);
+          else {
+            instance.cpuUsage = cpu;
+            array.push(instance);
+            cb();
+          }
+        });
+      }, function(err) {
+        if (err) callback(err);
+        else callback(null, array);
+      });
+    }]
+  }, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result.cpu);
+  })
+};
+
+exports.testCpu = function(callback) {
+  async.auto({
+      hypervisors: function(callback) {
+        var flavorname = 'm1.tiny';
+        compute.getFlavors(function(err, flavors) {
+          var flavor = _.findWhere(flavors, {
+            name: flavorname
+          });
+          self.hypervisorsAviableByCPU(flavor, function(err,
+            hypervisors) {
+            if (err) callback(err);
+            else callback(null, hypervisors[0]);
+          });
+        });
+      },
+      cpu: ['hypervisors', function(callback, obj) {
+        console.log(obj);
+        self.getHypervisorInstancesCpu('compute3', function(
+          err, result) {
+          if (err) callback(err);
+          else callback(null, result[0]);
+        });
+      }],
+      total: ['cpu', function(callback, obj) {
+        console.log(obj);
+        self.getHypervisorCpuNewVM(obj.hypervisors, obj.cpu,
+          function(
+            err, result) {
+            if (err) callback(err);
+            else callback(null, result);
+          })
+      }]
+    },
+    function(err, result) {
+      if (err) return callback(err);
+      else return callback(null, result.total.f2);
+    });
+}
+exports.getHypervisorCpuNewVM = function(hypervisor, instance,
+  callback) {
+  async.auto({
+    f1: function(callback) {
+      compute.getFlavor(instance.flavor, function(err, flavor) {
+        if (err) callback(err);
+        else callback(null, flavor);
+      })
+    },
+    f2: ['f1', function(callback, flavor) {
+      var cpuFlavor = flavor.f1.vcpus * instance.cpuUsage;
+      var newCpu = cpuFlavor / hypervisor.vcpus;
+      hypervisor.cpuUsage = hypervisor.cpuUsage + newCpu;
+      callback(null, hypervisor);
+    }]
+  }, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result);
+  });
+}
+
 
 exports.getAviablesExludeHypervisor = function(name, callback) {
   self.hypervisorsList(function(hypervisors) {
@@ -98,7 +200,8 @@ exports.findMigrateHypervisor = function(servers, name, callback) {
         var flavor = _.findWhere(flavors, {
           id: server.flavor
         });
-        var migrateTo = _.find(hypervisors, function(hypervisor) {
+        var migrateTo = _.find(hypervisors, function(
+          hypervisor) {
           //  if(hypervisor.vcpusUsed >0){
           async.parallel([
             function(callback) {
@@ -108,15 +211,18 @@ exports.findMigrateHypervisor = function(servers, name, callback) {
               } else callback(true);
             },
             function(callback) {
-              if ((flavor.ram + hypervisor.ramUsed) < (
+              if ((flavor.ram + hypervisor.ramUsed) <
+                (
                   hypervisor.ramTotal * percent)) {
                 callback(null);
               } else callback(true);
             },
             function(callback) {
 
-              if ((flavor.disk + hypervisor.usedDisk) < (
-                  hypervisor.totalDisk * percent)) {
+              if ((flavor.disk + hypervisor.usedDisk) <
+                (
+                  hypervisor.totalDisk * percent)
+              ) {
                 callback(null);
               } else callback(true);
             }
@@ -151,7 +257,8 @@ exports.findHypervisors = function(flavor, state, callback) {
   var result = [];
   self.hypervisorsList(function(hypervisors) {
     _.each(hypervisors, function(hypervisor) {
-      hypervisorParams(flavor, hypervisor, state, function(err, res) {
+      hypervisorParams(flavor, hypervisor, state, function(
+        err, res) {
         if (!err) result.push(hypervisor);
       });
     });
@@ -171,7 +278,7 @@ exports.getHosts = function(callback) {
 };
 
 
-exports.sleepHypervisor = function(hypervisor) {
+exports.sleepHypervisor = function(hypervisor, callback) {
   var ssh = new SSH({
     host: hypervisor,
     user: 'root',
@@ -182,7 +289,37 @@ exports.sleepHypervisor = function(hypervisor) {
       console.log(stdout);
     }
   }).start();
-  return true;
+  console.log('ENTRO0');
+  async.waterfall([
+      function(callback) {
+        telemetry.getAlarms(function(err, result) {
+          console.log(result);
+          if (err) callback(err);
+          else callback(null, result);
+        });
+      },
+      function(alarms, callback) {
+        console.log(alarms);
+        var filtered = _.filter(alarms, {
+          description: hypervisor
+        });
+        console.log(filtered);
+        async.each(filtered, function(alarm, cb) {
+          var id = alarm.alarm_id;
+          telemetry.deleteAlarm(id, function(err, result) {
+            if (err) cb(err);
+            else cb();
+          });
+        }, function(err) {
+          if (err) callback(err);
+          else callback(null);
+        });
+      }
+    ],
+    function(err, result) {
+      if (err) return callback(err);
+      else return callback(null);
+    });
 };
 
 exports.awakeHypervisor = function(hypervisor, callback) {
@@ -196,32 +333,72 @@ exports.awakeHypervisor = function(hypervisor, callback) {
       console.log(stdout);
     }
   }).start();
-  return callback(null);
+  var opt = config.alarmOptions;
+  opt.query = {
+    field: "resource_id",
+    type: "",
+    value: hypervisor + '_' + hypervisor,
+    op: "eq"
+  };
+  var urlAlarm = opt.alarm_actions;
+  async.parallel({
+    over: function(callback) {
+      var details = opt;
+      details.alarm_actions = urlAlarm + 'over/' + hypervisor;
+      details.name = 'cpuOver.' + hypervisor;
+      details.comparison_operator = 'gt';
+      details.threshold = config.maxCPU;
+      details.description = hypervisor;
+      telemetry.createAlarm(details, function(err, result) {
+        if (err) callback(err);
+        else callback(null, result);
+      });
+
+    },
+    under: function(callback) {
+      var details = opt;
+      details.alarm_actions = urlAlarm + 'under/' + hypervisor;
+      details.name = 'cpuUnder.' + hypervisor;
+      details.comparison_operator = 'lt';
+      details.threshold = config.minCPU;
+      details.description = hypervisor;
+      telemetry.createAlarm(details, function(err, result) {
+        if (err) callback(err);
+        else callback(null, result);
+      });
+    }
+  }, function(err, result) {
+    console.log(err, result);
+    if (err) return callback(err);
+    else return callback(null);
+  });
 }
 
 exports.getHypervisorInstances = function(hypervisor, callback) {
-  compute.getHypervisorInstances(hypervisor, function(err, hypervisorInf) {
+  compute.getHypervisorInstances(hypervisor, function(err,
+    hypervisorInf) {
     if (err) callback(err);
-    else callback(hypervisorInf[0]);
+    else callback(null, hypervisorInf[0]);
   });
 };
 
 exports.getInfoServers = function(servers, callback) {
   var array = [];
-  var i = 0;
   if (!servers) callback(array);
   else {
-    _.each(servers, function(server) {
+    async.each(servers, function(server, cb) {
       compute.getServer(server.uuid, function(serverCmp) {
-        i++;
         var push = {
           'id': serverCmp.id,
           'name': serverCmp.name,
           'flavor': serverCmp.flavor.id
         };
         array.push(push);
-        if (i == servers.length) callback(array);
+        cb();
       });
+    }, function(err) {
+      if (err) return callback(err);
+      else return callback(null, array);
     });
   }
 };

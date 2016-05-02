@@ -25,7 +25,11 @@ openstack.route('/server')
   .get(compute.getServers)
   .post(compute.createServer);
 openstack.route('/server/:hypervisor')
-  .get(compute.getServer);
+  .get(compute.getHypervisorInstances);
+openstack.route('/sleep/:hypervisor')
+  .get(compute.sleepServer);
+openstack.route('/test')
+  .get(compute.testCpu);
 openstack.route('/sorted/:flavor')
   .get(compute.sorted);
 openstack.route('/meters')
@@ -33,7 +37,8 @@ openstack.route('/meters')
 openstack.route('/meters/:meter/:resource')
   .get(meters.getStatistics);
 openstack.route('/alarm')
-  .get(alarm.getAlarms)
+  .get(alarm.getAlarms);
+openstack.route('/alarm/:type/:hypervisor')
   .post(alarm.alarmNotification);
 app.use('/openstack', openstack);
 

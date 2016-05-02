@@ -17,3 +17,10 @@ exports.getAlarms = function(req, res) {
     res.status(200).send(message);
   })
 }
+
+exports.createAlarm = function(req, res) {
+  telemetry.createAlarm(req.body, function(err, message) {
+    if (err) res.status(500).send(err);
+    else res.status(200).send(message);
+  });
+}
