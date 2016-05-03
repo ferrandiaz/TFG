@@ -10,6 +10,12 @@ var noHypervisorFound = {
   status: 404,
   message: 'No hosts aviable to launch this VM'
 }
+
+var noExists = {
+  status: 404,
+  message: 'Not Exists'
+}
 exports.imageNotFound = imageNotFound;
 exports.flavorNotFound = flavorNotFound;
 exports.noHypervisorsFound = noHypervisorFound;
+exports.noExists = noExists;

@@ -25,7 +25,7 @@ openstack.route('/server')
   .get(compute.getServers)
   .post(compute.createServer);
 openstack.route('/server/:hypervisor')
-  .get(compute.getHypervisorInstances);
+  .get(compute.overUsed);
 openstack.route('/sleep/:hypervisor')
   .get(compute.sleepServer);
 openstack.route('/test')

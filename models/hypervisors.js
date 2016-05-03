@@ -18,6 +18,8 @@ var relation = 2;
 
 var compute = pkgcloud.compute.createClient(client.options);
 
+// GET LIST OF ALL HYPERVISORS
+
 exports.hypervisorsList = function(callback) {
   compute.getHypervisors(function(err, hypervisors) {
     if (err) {
@@ -48,6 +50,40 @@ exports.hypervisorsList = function(callback) {
   });
 };
 
+//GET HYPERVISOR BY NAME
+
+exports.getHypervisor = function(hypervisor, callback) {
+  async.auto({
+    f1: function(callback) {
+      self.hypervisorsList(function(hypervisors) {
+        var find = _.findWhere(hypervisors, {
+          name: hypervisor
+        });
+        if (_.isUndefined(find)) callback(ERROR.noExists);
+        else return callback(null, find);
+      });
+    },
+    f2: ['f1', function(callback, obj) {
+      var hypervisor = obj.f1;
+      telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
+        1,
+        function(err, result) {
+          if (err) callback(err);
+          else {
+            hypervisor.cpuUsage = result[0].avg;
+            callback(null, hypervisor);
+          }
+        });
+    }]
+  }, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result.f2);
+  });
+
+}
+
+// GET ALL HYPERVISORS VIABLE TO LAUNCH A CERTAIN FLAVOR SORTED BY CPU USAGE
+
 exports.hypervisorsAviableByCPU = function(flavor, callback) {
   self.findHypervisors(flavor, 'up', function(err, hypervisors) {
     if (err) return callback(err);
@@ -73,7 +109,7 @@ exports.hypervisorsAviableByCPU = function(flavor, callback) {
 }
 
 exports.getVMCPU = function(id, callback) {
-  telemetry.getStatistics('cpu_util', id, 60, function(err, result) {
+  telemetry.getStatistics('cpu_util', id, 1, function(err, result) {
     if (err) return callback(err);
     else return callback(null, result[0].avg);
   });
@@ -95,7 +131,6 @@ exports.getHypervisorInstancesCpu = function(hypervisor, callback) {
     }],
     cpu: ['instanceInfo', function(callback, instances) {
       var array = [];
-      console.log(instances.instanceInfo);
       async.each(instances.instanceInfo, function(instance, cb) {
         self.getVMCPU(instance.id, function(err, cpu) {
           if (err) cb(err);
@@ -289,7 +324,6 @@ exports.sleepHypervisor = function(hypervisor, callback) {
       console.log(stdout);
     }
   }).start();
-  console.log('ENTRO0');
   async.waterfall([
       function(callback) {
         telemetry.getAlarms(function(err, result) {
@@ -299,11 +333,9 @@ exports.sleepHypervisor = function(hypervisor, callback) {
         });
       },
       function(alarms, callback) {
-        console.log(alarms);
         var filtered = _.filter(alarms, {
           description: hypervisor
         });
-        console.log(filtered);
         async.each(filtered, function(alarm, cb) {
           var id = alarm.alarm_id;
           telemetry.deleteAlarm(id, function(err, result) {
@@ -329,9 +361,7 @@ exports.awakeHypervisor = function(hypervisor, callback) {
     pass: 'telematica'
   });
   ssh.exec('service nova-compute start', {
-    out: function(stdout) {
-      console.log(stdout);
-    }
+    out: function(stdout) {}
   }).start();
   var opt = config.alarmOptions;
   opt.query = {
@@ -368,7 +398,6 @@ exports.awakeHypervisor = function(hypervisor, callback) {
       });
     }
   }, function(err, result) {
-    console.log(err, result);
     if (err) return callback(err);
     else return callback(null);
   });
@@ -393,8 +422,15 @@ exports.getInfoServers = function(servers, callback) {
           'name': serverCmp.name,
           'flavor': serverCmp.flavor.id
         };
-        array.push(push);
-        cb();
+        compute.getFlavor(push.flavor, function(err, result) {
+          if (err) cb(err);
+          else {
+            push.vcpus = result.vcpus;
+            push.flavorName = result.name;
+            array.push(push);
+            cb();
+          }
+        });
       });
     }, function(err) {
       if (err) return callback(err);

@@ -31,6 +31,13 @@ exports.getHypervisorInstances = function(req, res) {
   })
 }
 
+exports.overUsed = function(req, res) {
+  alg.overUsed(req.params.hypervisor, function(err, result) {
+    if (err) res.status(500);
+    else res.status(200).send(result);
+  });
+}
+
 exports.testCpu = function(req, res) {
   hypervisors.testCpu(function(err, result) {
     console.log(err, result);
