@@ -26,16 +26,8 @@ exports.overUsed = function(host, callback) {
             hypervisor.vcpus;
           instance.cpuOnHost = cpuOnHost;
         });
-        var arr = _.reject(array, function(el) {
-          return el.name === hypervisor.name;
-        });
-        if (_.isEmpty(arr)) callback({
-          status: 400
-        });
-        else {
-          var sorted = _.sortBy(arr, 'cpuOnHost');
-          callback(null, sorted);
-        }
+        var sorted = _.sortBy(array, 'cpuOnHost');
+        callback(null, sorted);
       }],
       toMigrate: ['cpuOnHost', function(callback, obj) {
         var instances = obj.cpuOnHost;
@@ -92,7 +84,9 @@ function toMigrate(hypervisor, instance, callback) {
           var arr = _.reject(result, function(el) {
             return el.name === hypervisor.name;
           });
-          if (_.isEmpty(result)) callback(ERROR.noHypervisorsFound);
+          if (_.isEmpty(result)) callback({
+            status: 400
+          });
           else callback(null, arr);
         });
       }],
