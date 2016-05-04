@@ -7,8 +7,32 @@ var config = require('../config/config.js');
 var listener = require('../listener/listener');
 var ERROR = require('../errors/errors');
 var compute = pkgcloud.compute.createClient(config.options);
-var ext;
+
 exports.overUsed = function(host, callback) {
+  async.auto({
+    f1: function(callback) {
+      findHost(host, function(err, result) {
+        if (err) return callback(err);
+        else callback(null, result);
+      });
+    },
+    f2: ['f1', function(callback, obj) {
+      var result = obj.f1;
+      var instance = result.instance.id;
+      var hypervisor = result.hypervisor.name;
+      compute.migrateServer(instance, hypervisor, function(err, res) {
+        if (err) callback(err);
+        else callback(null, res);
+      });
+    }]
+  }, function(err, result) {
+    if (err) return callback(err);
+    else return callback(null, result);
+  });
+}
+
+findHost = function(host, callback) {
+  var ext;
   async.auto({
       hypervisor: async.apply(hypervisors.getHypervisor, host),
       instances: ['hypervisor', function(callback, obj) {
@@ -50,29 +74,20 @@ exports.overUsed = function(host, callback) {
       if (err) {
         if (err.status == 400) {
           var instances = ext.cpuOnHost;
-          var host = ext.hypervisor;
-          migrateLessCPUVM(host, instances, function(error, rs) {
-            console.log(error, rs);
+          var hyperV = ext.hypervisor;
+          findOther(host, instances, hyperV, function(error, res) {
             if (error) return callback(error);
-            else return callback(null, rs.find);
-          });
-          //intentar mirgrar 1 de les vm del host prioritzant les que consumeixen menys cpu,
-          // si no es pot migrar cap, mirar dels hypervisors dormits si es possible migrar una mirant que l'us de cpu del nou hypervisor sigui menor al cpuMAX
-          // si no ERROR
+            else return callback(null, res);
+          })
         } else {
-          //TRUE ERROR
+          return callback(err)
         }
       } else {
-        if (!_.isEmpty(result.toMigrate)) {
-          callback(null, result.toMigrate);
-          //MIGRATE VM
-        } else {
-          //Exec, function migrate little VM
-        }
+        callback(null, result.toMigrate);
       }
-
     });
 }
+
 
 function toMigrate(hypervisor, instance, callback) {
   async.auto({
@@ -105,13 +120,27 @@ function toMigrate(hypervisor, instance, callback) {
         });
       }],
       end: ['hypervisors', function(callback, result) {
-        async.each(result.hypervisors, function(host, cb) {
-          hypervisors.getHypervisorCpuNewVM(host, instance, function(
-            err, hyp) {
-            if (parseFloat(hyp.f2.cpuUsage) < config.maxCPU) {
-              cb(hyp.f2);
-            } else cb(null, true);
-          });
+        var arr = _.reject(result.hypervisors, function(host) {
+          if (host.name == hypervisor.name) return host;
+        })
+        async.each(arr, function(host, cb) {
+          console.log(
+            '================= TOMIGRATE ================'
+          );
+          console.log(host);
+          console.log(
+            "===================================================="
+          );
+          hypervisors.getHypervisorCpuNewVM(host, instance,
+            function(
+              err, hyp) {
+              if (parseFloat(hyp.f2.cpuUsage) < config.maxCPU) {
+                var obj = {};
+                obj.hypervisor = hyp.f2;
+                obj.instance = instance;
+                cb(obj);
+              } else cb(null, true);
+            });
         }, function(rs, err) {
           if (rs) callback(null, rs);
           else callback({
@@ -125,6 +154,56 @@ function toMigrate(hypervisor, instance, callback) {
       else callback(null, result.end);
     });
 }
+
+findOther = function(host, instances, hyperV, callback) {
+  async.auto({
+      f1: function(callback) {
+        migrateLessCPUVM(hyperV, instances, function(error, rs) {
+          if (error) callback(null);
+          else callback(null, rs);
+        });
+      },
+      f2: ['f1', function(callback, arg) {
+        var obj = arg.f1;
+        if (!_.isEmpty(obj)) callback(null, obj);
+        else {
+          migrateToSleep(instances, function(er, res) {
+            if (er) callback(er);
+            else callback(null, res);
+          });
+        }
+      }],
+      f3: ['f2', function(callback, arg) {
+
+        var obj = arg.f2;
+        console.log(obj);
+        var instance = obj.instance.id;
+        var hypervisor = obj.hypervisor.name;
+        compute.migrateServer(instance, hypervisor,
+          function(er, resultat) {
+            if (er) callback(er);
+            else callback(null);
+          });
+      }]
+    },
+    function(error, rs) {
+      if (error) return callback(error);
+      else {
+        console.log('migrar una altre VM');
+        setTimeout(function() {
+          console.log('migrar una altre VM');
+          findHost(host, function(err, res) {
+            if (err) return callback(err);
+            else {
+              callback(null, res);
+            }
+          });
+        }, 120000);
+
+      }
+    });
+}
+
 
 migrateLessCPUVM = function(hypervisor, instances, callback) {
   async.each(instances, function(instance, cb) {
@@ -143,7 +222,15 @@ migrateLessCPUVM = function(hypervisor, instances, callback) {
         hosts: ['flavor', function(callback, obj) {
           hypervisors.hypervisorsAviableByCPU(obj.flavor,
             function(err, result) {
-              callback(null, result);
+              var arr = [];
+              var arr = _.reject(result, function(
+                host) {
+                if (host.name == hypervisor.name) return
+                host;
+              });
+              console.log(hypervisor.name);
+              if (_.isEmpty(arr)) callback(ERROR.noHypervisorsFound);
+              else callback(null, arr);
             })
         }],
         find: ['hosts', function(callback, obj) {
@@ -154,17 +241,29 @@ migrateLessCPUVM = function(hypervisor, instances, callback) {
         }],
         migrate: ['find', function(callback, obj) {
           var hosts = obj.find;
+
           async.each(hosts, function(host, clbk) {
+            console.log(
+              '================= MIGRATELESSCPUVM ================'
+            );
+            console.log(host);
+            console.log(
+              "===================================================="
+            );
             hypervisors.getHypervisorCpuNewVM(host, instance,
               function(err, result) {
                 if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
                   migrate = result.f2;
-                  clbk(result.f2);
+                  var rs = {};
+                  rs.hypervisor = result.f2;
+                  rs.instance = instance;
+                  clbk(rs);
                 } else clbk();
               });
 
           }, function(rs) {
-            if (!_.isUndefined(rs)) callback(null, rs);
+            if (!_.isUndefined(rs.hypervisor)) callback(null,
+              rs);
             else callback(ERROR.noHypervisorsFound);
           })
         }]
@@ -174,7 +273,61 @@ migrateLessCPUVM = function(hypervisor, instances, callback) {
       })
     },
     function(res) {
-      if (!_.isEmpty(res)) callback(null, res);
+      if (!_.isEmpty(res)) callback(null, res.migrate);
       else callback(ERROR.noHypervisorsFound);
     });
+}
+
+migrateToSleep = function(instances, callback) {
+  console.log('Entro migrateSleep');
+  async.each(instances, function(instance, cb) {
+
+    console.log('Entro each');
+    async.auto({
+      flavor: function(callback) {
+        console.log('flavor');
+        compute.getFlavor(instance.flavor, function(err, result) {
+          if (err) callback(ERROR.flavorNotFound);
+          else callback(null, flavor);
+        });
+      },
+      hosts: ['flavor', function(callback, obj) {
+        console.log('HOSTS');
+        var flavor = obj.flavor;
+        hypervisors.findHypervisors(flavor, 'down', function(
+          err,
+          result) {
+          console.log(err, result);
+          if (err) callback(err);
+          else callback(null, result);
+        });
+      }],
+      migrate: ['hosts', function(callback, obj) {
+        var flavor = obj.flavor;
+        var hosts = obj.hosts;
+        var migrate = _.find(hosts, function(host) {
+          var consume = (instance.cpuUsage * flavor.vcpus) /
+            host.vcpus;
+          if (consume < config.maxCPU) {
+            return host;
+          }
+        });
+        var rs = {};
+        rs.hypervisor = migrate;
+        rs.instance = instance;
+        if (!_.isEmpty(migrate)) callback(null, rs);
+        else callback(ERROR.noHypervisorsFound);
+      }]
+    }, function(err, result) {
+      if (err) cb();
+      else cb(result.migrate);
+    })
+  }, function(res) {
+    if (!_.isEmpty(res)) {
+      hypervisors.awakeHypervisor(res.name, function(err) {
+        if (err) return callback(err);
+        else return callback(null, res.migrate);
+      });
+    } else return callback(ERROR.noHypervisorsFound);
+  });
 }
