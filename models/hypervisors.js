@@ -101,6 +101,11 @@ exports.hypervisorsAviableByCPU = function(flavor, callback) {
       function(err) {
         if (err) return callback(err);
         else {
+          _.each(hypervisors, function(hypervisor, idx) {
+            if (hypervisor.cpuUsage >= config.maxCPU) {
+              delete hypervisors[idx];
+            }
+          })
           var sorted = _.sortBy(hypervisors, 'cpuUsage');
           return callback(null, sorted);
         }
