@@ -32,7 +32,9 @@ exports.getHypervisorInstances = function(req, res) {
 }
 
 exports.overUsed = function(req, res) {
+
   alg.overUsed(req.params.hypervisor, function(err, result) {
+    console.log(err, result);
     if (err) res.status(err.status).send(err.message);
     else res.status(200).send(result);
   });

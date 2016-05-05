@@ -93,8 +93,16 @@ exports.hypervisorsAviableByCPU = function(flavor, callback) {
           function(err, result) {
             if (err) cb(err);
             else {
-              hypervisor.cpuUsage = result[0].avg;
-              cb();
+              if (!_.isUndefined(result[0])) {
+                hypervisor.cpuUsage = result[0].avg;
+                cb();
+              } else {
+                self.hypervisorsAviableByCPU(flavor, function(err,
+                  result) {
+                  if (err) cb(err);
+                  else cb();
+                })
+              }
             }
           });
       },

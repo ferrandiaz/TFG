@@ -10,25 +10,40 @@ var compute = pkgcloud.compute.createClient(config.options);
 
 exports.overUsed = function(host, callback) {
   async.auto({
-    f1: function(callback) {
-      findHost(host, function(err, result) {
-        if (err) return callback(err);
-        else callback(null, result);
-      });
+      f1: function(callback) {
+        findHost(host, function(err, result) {
+          if (err) {
+            if (_.isArray(err)) callback({
+              status: 404,
+              message: 'NO INSTANCES FOUND'
+            });
+            else callback(err);
+          } else callback(null, result);
+        });
+      },
+      f2: ['f1', function(callback, obj) {
+        var result = obj.f1;
+        var instance = result.instance.id;
+        var hypervisor = result.hypervisor.name;
+        compute.migrateServer(instance, hypervisor, function(er, res) {
+          listener.listenerClose('migrationQueue', function(err,
+            msg) {
+            if (er) callback(er);
+            else {
+              if (msg ===
+                'compute.instance.live_migration._post.end');
+              callback(null, msg);
+            }
+          });
+        });
+      }]
     },
-    f2: ['f1', function(callback, obj) {
-      var result = obj.f1;
-      var instance = result.instance.id;
-      var hypervisor = result.hypervisor.name;
-      compute.migrateServer(instance, hypervisor, function(err, res) {
-        if (err) callback(err);
-        else callback(null, res);
-      });
-    }]
-  }, function(err, result) {
-    if (err) return callback(err);
-    else return callback(null, result);
-  });
+    function(err, result) {
+      console.log('OverUsed after MSG');
+      console.log(err);
+      if (err) return callback(err);
+      else return callback(null, result);
+    });
 }
 
 findHost = function(host, callback) {
@@ -165,26 +180,41 @@ findOther = function(host, instances, hyperV, callback) {
       },
       f2: ['f1', function(callback, arg) {
         var obj = arg.f1;
-        if (!_.isUndefined(obj)) callback(null, obj);
+        console.log(obj);
+        if (!_.isNull(obj)) callback(null, obj);
         else {
           migrateToSleep(instances, function(er, res) {
+            console.log(er);
             if (er) callback(er);
             else callback(null, res);
           });
         }
       }],
       f3: ['f2', function(callback, arg) {
+
         var obj = arg.f2;
-        var instance = obj.instance.id;
-        var hypervisor = obj.hypervisor.name;
-        compute.migrateServer(instance, hypervisor,
-          function(er, resultat) {
-            if (er) callback(er);
-            else callback(null);
-          });
+        console.log(obj);
+        if (_.isUndefined(obj)) callback(ERROR.noHypervisorsFound);
+        else {
+          var instance = obj.instance.id;
+          var hypervisor = obj.hypervisor.name;
+          compute.migrateServer(instance, hypervisor,
+            function(er, resultat) {
+              listener.listenerClose('migrateQueue', function(err,
+                msg) {
+                if (er) callback(er);
+                else {
+                  if (msg ===
+                    'compute.instance.live_migration._post.end');
+                  callback(null, msg);
+                }
+              });
+            });
+        }
       }]
     },
     function(error, rs) {
+      console.log('AFTER MSG SERVER MIGRATED');
       if (error) return callback(error);
       else {
         setTimeout(function() {
@@ -257,7 +287,7 @@ migrateLessCPUVM = function(hypervisor, instances, callback) {
               });
 
           }, function(rs) {
-            if (!_.isUndefined(rs.hypervisor)) callback(null,
+            if (!_.isUndefined(rs)) callback(null,
               rs);
             else callback(ERROR.noHypervisorsFound);
           })
