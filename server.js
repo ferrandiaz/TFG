@@ -24,12 +24,12 @@ var openstack = express.Router();
 openstack.route('/server')
   .get(compute.getServers)
   .post(compute.createServer);
-openstack.route('/server/:hypervisor')
+openstack.route('/server/over/:hypervisor')
   .get(compute.overUsed);
+openstack.route('/server/under/:hypervisor')
+  .get(compute.underUsed);
 openstack.route('/sleep/:hypervisor')
   .get(compute.sleepServer);
-openstack.route('/test')
-  .get(compute.testCpu);
 openstack.route('/sorted/:flavor')
   .get(compute.sorted);
 openstack.route('/meters')

@@ -44,6 +44,7 @@ exports.hypervisorsList = function(callback) {
           'state': json.state
         };
         result.push(push);
+
       });
       callback(result);
     }
@@ -165,44 +166,6 @@ exports.getHypervisorInstancesCpu = function(hypervisor, callback) {
   })
 };
 
-exports.testCpu = function(callback) {
-  async.auto({
-      hypervisors: function(callback) {
-        var flavorname = 'm1.tiny';
-        compute.getFlavors(function(err, flavors) {
-          var flavor = _.findWhere(flavors, {
-            name: flavorname
-          });
-          self.hypervisorsAviableByCPU(flavor, function(err,
-            hypervisors) {
-            if (err) callback(err);
-            else callback(null, hypervisors[0]);
-          });
-        });
-      },
-      cpu: ['hypervisors', function(callback, obj) {
-        console.log(obj);
-        self.getHypervisorInstancesCpu('compute3', function(
-          err, result) {
-          if (err) callback(err);
-          else callback(null, result[0]);
-        });
-      }],
-      total: ['cpu', function(callback, obj) {
-        console.log(obj);
-        self.getHypervisorCpuNewVM(obj.hypervisors, obj.cpu,
-          function(
-            err, result) {
-            if (err) callback(err);
-            else callback(null, result);
-          })
-      }]
-    },
-    function(err, result) {
-      if (err) return callback(err);
-      else return callback(null, result.total.f2);
-    });
-}
 exports.getHypervisorCpuNewVM = function(hypervisor, instance,
   callback) {
   async.auto({
@@ -216,6 +179,9 @@ exports.getHypervisorCpuNewVM = function(hypervisor, instance,
       var cpuFlavor = flavor.f1.vcpus * instance.cpuUsage;
       var newCpu = cpuFlavor / hypervisor.vcpus;
       hypervisor.cpuUsage = hypervisor.cpuUsage + newCpu;
+      hypervisor.vcpusUsed = hypervisor.vcpusUsed + flavor.f1.vcpus;
+      hypervisor.ramUsed = hypervisor.ramUsed + flavor.f1.ram;
+      hypervisor.usedDisk = hypervisor.usedDisk + flavor.f1.disk;
       callback(null, hypervisor);
     }]
   }, function(err, result) {
@@ -306,7 +272,7 @@ exports.findHypervisors = function(flavor, state, callback) {
   var result = [];
   self.hypervisorsList(function(hypervisors) {
     _.each(hypervisors, function(hypervisor) {
-      hypervisorParams(flavor, hypervisor, state, function(
+      self.hypervisorParams(flavor, hypervisor, state, function(
         err, res) {
         if (!err) result.push(hypervisor);
       });
@@ -460,8 +426,65 @@ exports.getHost = function(hostName, callback) {
     else callback(hosts);
   });
 };
+exports.hypervisorsCpu = function(callback) {
+  var arr = [];
+  async.auto({
+      f1: function(callback) {
+        self.hypervisorsList(function(result) {
+          if (_.isEmpty(result)) callback(ERROR.noHypervisorsFound);
+          else callback(null, result);
 
-function hypervisorParams(flavor, hypervisor, state, callback) {
+        });
+      },
+      f2: ['f1', function(callback, arg) {
+        var hypervisors = arg.f1;
+        async.each(hypervisors, function(hypervisor, cb) {
+          if (hypervisor.state != 'down') {
+            hypervisorCpu(hypervisor, function(err, resultat) {
+              if (err) cb(err);
+              else {
+                console.log(resultat);
+                hypervisor.cpuUsage = resultat.cpuUsage;
+                arr.push(hypervisor);
+                console.log(arr);
+                cb();
+              }
+            });
+          } else {
+            cb();
+          }
+        }, function(err) {
+          if (err) callback(err);
+          else {
+            var sort = _.sortBy(arr, 'cpuUsage');
+            callback(null, sort);
+          }
+        });
+      }]
+    },
+    function(err, result) {
+      console.log(result);
+      if (err) callback(err);
+      else callback(result.f2);
+    });
+}
+
+function hypervisorCpu(hypervisor, callback) {
+  telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
+    1,
+    function(err, result) {
+      if (err) return callback(err);
+      else {
+        if (!_.isEmpty(result)) {
+          return callback(null, {
+            cpuUsage: result[0].avg
+          });
+        } else return callback(true);
+      }
+    });
+}
+
+exports.hypervisorParams = function(flavor, hypervisor, state, callback) {
   if (hypervisor.state == state) {
     async.parallel([
       function(callback) {
