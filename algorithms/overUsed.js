@@ -165,7 +165,7 @@ findOther = function(host, instances, hyperV, callback) {
       },
       f2: ['f1', function(callback, arg) {
         var obj = arg.f1;
-        if (!_.isEmpty(obj)) callback(null, obj);
+        if (!_.isUndefined(obj)) callback(null, obj);
         else {
           migrateToSleep(instances, function(er, res) {
             if (er) callback(er);
@@ -174,9 +174,7 @@ findOther = function(host, instances, hyperV, callback) {
         }
       }],
       f3: ['f2', function(callback, arg) {
-
         var obj = arg.f2;
-        console.log(obj);
         var instance = obj.instance.id;
         var hypervisor = obj.hypervisor.name;
         compute.migrateServer(instance, hypervisor,
@@ -189,9 +187,7 @@ findOther = function(host, instances, hyperV, callback) {
     function(error, rs) {
       if (error) return callback(error);
       else {
-        console.log('migrar una altre VM');
         setTimeout(function() {
-          console.log('migrar una altre VM');
           findHost(host, function(err, res) {
             if (err) return callback(err);
             else {
@@ -199,7 +195,6 @@ findOther = function(host, instances, hyperV, callback) {
             }
           });
         }, 120000);
-
       }
     });
 }
@@ -282,7 +277,6 @@ migrateToSleep = function(instances, callback) {
   console.log('Entro migrateSleep');
   async.each(instances, function(instance, cb) {
 
-    console.log('Entro each');
     async.auto({
       flavor: function(callback) {
         console.log('flavor');
@@ -292,12 +286,10 @@ migrateToSleep = function(instances, callback) {
         });
       },
       hosts: ['flavor', function(callback, obj) {
-        console.log('HOSTS');
         var flavor = obj.flavor;
         hypervisors.findHypervisors(flavor, 'down', function(
           err,
           result) {
-          console.log(err, result);
           if (err) callback(err);
           else callback(null, result);
         });
@@ -315,7 +307,7 @@ migrateToSleep = function(instances, callback) {
         var rs = {};
         rs.hypervisor = migrate;
         rs.instance = instance;
-        if (!_.isEmpty(migrate)) callback(null, rs);
+        if (!_.isUndefined(migrate)) callback(null, rs);
         else callback(ERROR.noHypervisorsFound);
       }]
     }, function(err, result) {
@@ -323,10 +315,20 @@ migrateToSleep = function(instances, callback) {
       else cb(result.migrate);
     })
   }, function(res) {
+    console.log(
+      "***********************Hypervisor + Instance ***********************"
+    );
+    console.log(res);
+    console.log("*************************************************");
     if (!_.isEmpty(res)) {
-      hypervisors.awakeHypervisor(res.name, function(err) {
-        if (err) return callback(err);
-        else return callback(null, res.migrate);
+
+      hypervisors.awakeHypervisor(res.hypervisor.name, function(err) {
+        console.log('Awake Hypervisor ' + res.hypervisor.name);
+        setTimeout(function() {
+          console.log('Espero 2 minuts abans de enviar el OK');
+          if (err) return callback(err);
+          else return callback(null, res);
+        }, 120000);
       });
     } else return callback(ERROR.noHypervisorsFound);
   });

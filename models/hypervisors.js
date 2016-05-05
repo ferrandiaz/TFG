@@ -367,7 +367,9 @@ exports.awakeHypervisor = function(hypervisor, callback) {
     pass: 'telematica'
   });
   ssh.exec('service nova-compute start', {
-    out: function(stdout) {}
+    out: function(stdout) {
+      console.log(stdout);
+    }
   }).start();
   var opt = config.alarmOptions;
   opt.query = {
