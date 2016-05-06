@@ -182,6 +182,7 @@ exports.getHypervisorCpuNewVM = function(hypervisor, instance,
       hypervisor.vcpusUsed = hypervisor.vcpusUsed + flavor.f1.vcpus;
       hypervisor.ramUsed = hypervisor.ramUsed + flavor.f1.ram;
       hypervisor.usedDisk = hypervisor.usedDisk + flavor.f1.disk;
+      console.log('newCpu = ' + hypervisor.cpuUsage);
       callback(null, hypervisor);
     }]
   }, function(err, result) {
