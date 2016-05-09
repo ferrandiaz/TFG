@@ -24,10 +24,10 @@ var openstack = express.Router();
 openstack.route('/server')
   .get(compute.getServers)
   .post(compute.createServer);
-openstack.route('/server/over/:hypervisor')
-  .get(compute.overUsed);
-openstack.route('/server/under/:hypervisor')
-  .get(compute.underUsed);
+openstack.route('/alarm/over/:hypervisor')
+  .post(compute.overUsed);
+openstack.route('/alarm/under/:hypervisor')
+  .post(compute.underUsed);
 openstack.route('/sleep/:hypervisor')
   .get(compute.sleepServer);
 openstack.route('/sorted/:flavor')
@@ -38,8 +38,8 @@ openstack.route('/meters/:meter/:resource')
   .get(meters.getStatistics);
 openstack.route('/alarm')
   .get(alarm.getAlarms);
-openstack.route('/alarm/:type/:hypervisor')
-  .post(alarm.alarmNotification);
+/*openstack.route('/alarm/:type/:hypervisor')
+  .get(alarm.alarmNotification);*/
 app.use('/openstack', openstack);
 
 listener.listener('notificationsQueue', function(err, msg) {

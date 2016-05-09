@@ -13,11 +13,12 @@ exports.overUsed = function(host, callback) {
       f1: function(callback) {
         findHost(host, function(err, result) {
           if (err) {
-            if (_.isArray(err)) callback({
-              status: 404,
-              message: 'NO INSTANCES FOUND'
-            });
-            else callback(err);
+            if (_.isArray(err)) {
+              callback({
+                status: 404,
+                message: 'NO INSTANCES FOUND'
+              });
+            } else callback(err);
           } else callback(null, result);
         });
       },
@@ -47,7 +48,22 @@ exports.overUsed = function(host, callback) {
 findHost = function(host, callback) {
   var ext;
   async.auto({
-      hypervisor: async.apply(hypervisors.getHypervisor, host),
+      hypervisor: function(callback) {
+        hypervisors.getHypervisor(host, function(err, result) {
+          if (err) callback(err);
+          else {
+            if (result.cpuUsage < 60) {
+              console.log('Hypervisor Under 60%');
+              callback({
+                status: 200,
+                message: 'Hypervisor Under 60%'
+              });
+            } else {
+              callback(null, result);
+            }
+          }
+        });
+      },
       instances: ['hypervisor', function(callback, obj) {
         hypervisors.getHypervisorInstancesCpu(host, function(err,
           result) {
@@ -71,7 +87,8 @@ findHost = function(host, callback) {
         var instances = obj.cpuOnHost;
         var error;
         async.eachSeries(instances, function(instance, clbk) {
-          toMigrate(obj.hypervisor, instance, function(err, result) {
+          toMigrate(obj.hypervisor, instance, function(err,
+            result) {
             if (_.isUndefined(result)) {
               error = err;
               clbk();
@@ -127,7 +144,8 @@ function toMigrate(hypervisor, instance, callback) {
       hypervisors: ['flavor', function(callback, obj) {
         hypervisors.hypervisorsAviableByCPU(obj.flavor, function(
           err, result) {
-          if (_.isEmpty(result[0])) {
+          console.log(result);
+          if (_.isEmpty(result)) {
             callback({
               status: 400
             });
@@ -197,7 +215,8 @@ findOther = function(host, instances, hyperV, callback) {
                 if (er) callback(er);
                 else {
                   if (msg ===
-                    'compute.instance.live_migration._post.end') {
+                    'compute.instance.live_migration._post.end'
+                  ) {
                     callback(null, msg);
                   }
                 }
@@ -263,9 +282,11 @@ migrateLessCPUVM = function(hypervisor, instances, callback) {
         migrate: ['find', function(callback, obj) {
           var hosts = obj.find;
           async.eachSeries(hosts, function(host, clbk) {
-            hypervisors.getHypervisorCpuNewVM(host, instance,
+            hypervisors.getHypervisorCpuNewVM(host,
+              instance,
               function(err, result) {
-                if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
+                if (parseFloat(result.f2.cpuUsage) <
+                  config.maxCPU) {
                   migrate = result.f2;
                   var rs = {};
                   rs.hypervisor = result.f2;

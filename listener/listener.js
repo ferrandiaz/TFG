@@ -1,5 +1,6 @@
 var amqp = require('amqplib');
 var async = require('async');
+var alg = require('../algorithms/algorithms');
 exports.listenerClose = function(queue, callback) {
   console.log('Entro');
   require('amqplib/callback_api')
@@ -61,6 +62,7 @@ function consumer(conn, queue, callback) {
             return callback(null, jMS.event_type);
           }
           if (jMS.event_type === 'compute.instance.delete.end') {
+            alg.deleteVM(jMS.payload.host);
             return callback(null, jMS.event_type);
           }
           if (jMS.event_type ===

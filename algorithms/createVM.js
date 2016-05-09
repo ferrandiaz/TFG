@@ -56,7 +56,8 @@ exports.createVM = function(obj, callback) {
         serverParams.image = create.validate.image;
         serverParams.flavor = create.validate.flavor;
         serverParams.name = obj.name;
-        serverParams.networks = obj.networks
+        serverParams.networks = obj.networks;
+        serverParams.keyname = obj.keyname;
         serverParams.hypervisor = 'nova:' + create.finalHypervisor.name;
         compute.createServer(serverParams, function(err, server) {
           listener.listenerClose('startServerQueue',
