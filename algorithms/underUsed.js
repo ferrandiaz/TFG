@@ -59,9 +59,7 @@ function under(host, callback) {
         })
       },
       hostsCpu: ['hypervisor', function(callback, obj) {
-        console.log('Entro');
         hypervisors.hypervisorsCpu(function(result) {
-          console.log(result);
           if (_.isEmpty(result)) callback(ERROR.noHypervisorsFound);
           else {
             var arr = _.reject(result, function(hst) {

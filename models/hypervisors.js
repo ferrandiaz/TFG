@@ -51,6 +51,18 @@ exports.hypervisorsList = function(callback) {
   });
 };
 
+exports.hypervisorsDown = function(callback) {
+  self.hypervisorsList(function(array) {
+    var arr = _.where(array, {
+      state: 'down'
+    });
+    _.each(arr, function(obj) {
+      obj.cpuUsage = 1;
+    })
+    callback(null, arr);
+  });
+}
+
 //GET HYPERVISOR BY NAME
 
 exports.getHypervisor = function(hypervisor, callback) {
@@ -69,6 +81,7 @@ exports.getHypervisor = function(hypervisor, callback) {
       telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
         1,
         function(err, result) {
+          console.log(err, result);
           if (err) callback(err);
           else {
             hypervisor.cpuUsage = result[0].avg;
@@ -438,8 +451,8 @@ exports.hypervisorsCpu = function(callback) {
         });
       },
       f2: ['f1', function(callback, arg) {
-        var hypervisors = arg.f1;
-        async.each(hypervisors, function(hypervisor, cb) {
+        var array = arg.f1;
+        async.each(array, function(hypervisor, cb) {
           if (hypervisor.state != 'down') {
             hypervisorCpu(hypervisor, function(err, resultat) {
               if (err) cb(err);
@@ -455,6 +468,7 @@ exports.hypervisorsCpu = function(callback) {
             cb();
           }
         }, function(err) {
+          console.log(err);
           if (err) callback(err);
           else {
             var sort = _.sortBy(arr, 'cpuUsage');
@@ -464,7 +478,6 @@ exports.hypervisorsCpu = function(callback) {
       }]
     },
     function(err, result) {
-      console.log(result);
       if (err) callback(err);
       else callback(result.f2);
     });
@@ -474,6 +487,7 @@ function hypervisorCpu(hypervisor, callback) {
   telemetry.getStatistics('compute.node.cpu.percent', hypervisor.name,
     1,
     function(err, result) {
+      console.log(err, result);
       if (err) return callback(err);
       else {
         if (!_.isEmpty(result)) {

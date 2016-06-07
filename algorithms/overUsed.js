@@ -144,7 +144,6 @@ function toMigrate(hypervisor, instance, callback) {
       hypervisors: ['flavor', function(callback, obj) {
         hypervisors.hypervisorsAviableByCPU(obj.flavor, function(
           err, result) {
-          console.log(result);
           if (_.isEmpty(result)) {
             callback({
               status: 400
@@ -171,9 +170,40 @@ function toMigrate(hypervisor, instance, callback) {
             });
         }, function(rs) {
           if (rs) callback(null, rs);
-          else callback({
-            status: 400
-          });
+          else {
+            async.auto({
+                hosts: function(callback) {
+                  var flavor = result.flavor;
+                  hypervisors.findHypervisors(flavor, 'down',
+                    function(err, result) {
+                      if (err) callback(err);
+                      else callback(null, result);
+                    });
+                },
+                migrate: ['hosts', function(callback, obj) {
+                  var flavor = obj.flavor;
+                  var hosts = obj.hosts;
+                  var migrate = _.find(hosts, function(host) {
+                    var consume = (instance.cpuUsage *
+                        flavor.vcpus) /
+                      host.vcpus;
+                    if (consume < config.maxCPU) {
+                      return host;
+                    }
+                  });
+                  var rs = {};
+                  rs.hypervisor = migrate;
+                  rs.instance = instance;
+                  if (!_.isUndefined(migrate)) callback(null,
+                    rs);
+                  else callback(ERROR.noHypervisorsFound);
+                }]
+              },
+              function(err, result) {
+                if (err) cb(err);
+                else return cb(result.migrate);
+              });
+          }
         });
       }]
     },
