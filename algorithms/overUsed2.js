@@ -27,12 +27,15 @@ exports.overUsed2 = function(host, callback) {
     },
     function(host, instances, awake, sleep, callback) {
       findMigrate(host, instances, awake, sleep, function(err, result) {
-        if (err) callback(err);
-        else callback(null, result);
+        console.log('%%%%%%%%%%% FIND MIGRATE %%%%%%%%%%%%');
+        console.log(result);
+        callback(ERROR.noHypervisorsFound);
+        //  if (err) callback(err);
+        //else callback(null, result);
       });
     },
     function(array, callback) {
-      async.each(array, function(instance, cb) {
+      async.eachSeries(array, function(instance, cb) {
         var instance = instance.instance.id;
         var hypervisor = instance.hypervisor.name;
         compute.migrateServer(instance, hypervisor, function(er, res) {
@@ -115,13 +118,105 @@ function info(host, callback) {
 }
 
 function findMigrate(host, instances, awake, sleep, callback) {
-  findOne(host, instances, awake, sleep, function(err, result) {
-    console.log("RESULT");
-    console.log(err, result);
-  });
+  var array = [];
+  var bool = false;
+  async.until(
+    function() {
+      return bool;
+    },
+    function(callback) {
+      async.waterfall([
+        function(callback) {
+          findOne(host, instances, awake, sleep, function(err, result) {
+            if (_.isObject(result)) {
+              array.push(result);
+              bool = true;
+              callback(null, true);
+            } else {
+              callback(null, false);
+            }
+          });
+        },
+        function(arg, callback) {
+          if (!arg) {
+            findLess(host, instances, awake, sleep, function(err, result) {
+              if (err) return callback(err);
+              else {
+                async.parallel({
+                  host: function(callback) {
+                    host.cpuUsage = host.cpuUsage - result.instance
+                      .cpuOnHost;
+                    callback(null, host);
+                  },
+                  instances: function(callback) {
+                    instances = _.reject(instances, function(
+                      instance) {
+                      if (instance.id == result.instance.id) {
+                        return instance;
+                      }
+                    });
+                    callback(null, instances);
+                  },
+                  awake: function(callback) {
+                    var exist = _.findWhere(awake, {
+                      id: result.hypervisor.id
+                    });
+                    if (_.isUndefined(exist)) awake.push(result
+                      .hypervisor);
+                    else {
+                      awake = _.reject(awake, function(hyper) {
+                        if (hyper.id == result.hypervisor.id) {
+                          return hyper;
+                        }
+                      });
+                      awake.push(result.hypervisor);
+                      awake = _.sortBy(awake, 'cpuUsage');
+                    }
+                    callback(null, awake);
+                  },
+                  sleep: function(callback) {
+                    var exist = _.findWhere(awake, {
+                      id: result.hypervisor.id
+                    });
+                    if (!_.isUndefined(exist)) {
+                      sleep = _.reject(sleep, function(hyper) {
+                        if (hyper.id == result.hypervisor.id) {
+                          return hyper;
+                        }
+                      });
+                    }
+                    callback(null, sleep);
+                  }
+                }, function(error, resultat) {
+                  host = resultat.host;
+                  instanes = resultat.instances;
+                  awake = resultat.awake;
+                  sleep = resultat.sleep;
+                  array.push(result);
+                  callback(null, true);
+                });
+              }
+            });
+          } else {
+            callback(null, true);
+          }
+        }
+      ], function(err, result) {
+        if (err) callback(err);
+        else callback(null, result);
+      })
+
+    },
+    function(err) {
+      console.log(array);
+      if (err) return callback(err);
+      else return callback(null, array);
+    }
+  );
 }
 
 function findOne(host, instances, awake, sleep, callback) {
+  console.log('HOST: ' + host.cpuUsage);
   async.eachSeries(instances, function(instance, cb) {
       async.auto({
           flavor: function(callback) {
@@ -137,9 +232,12 @@ function findOne(host, instances, awake, sleep, callback) {
           },
           awakeHyp: ['flavor', function(callback, arg) {
             var array = [];
+            console.log("HOST USAGE: " + host.cpuUsage);
             var resultCpu = host.cpuUsage - instance.cpuOnHost;
+            console.log("RESULTCPU: " + resultCpu);
             if (resultCpu < config.maxCPU) {
               async.eachSeries(awake, function(obj, clbk) {
+                console.log(obj.name);
                 hypervisors.getHypervisorCpuNewVM(obj, instance,
                   function(err, result) {
                     if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
@@ -154,7 +252,6 @@ function findOne(host, instances, awake, sleep, callback) {
                 if (err) callback(err);
                 else {
                   if (!_.isEmpty(array)) {
-                    console.log(array[0]);
                     var sort = _.sortBy(array, 'cpuUsage');
                     var first = _.first(array);
                     callback(null, first);
@@ -166,6 +263,8 @@ function findOne(host, instances, awake, sleep, callback) {
             } else callback(null, 0);
           }],
           sleepHyp: ['awakeHyp', function(callback, arg) {
+            console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@');
+            console.log(arg.awakeHyp);
             if (_.isObject(arg.awakeHyp)) callback(null, arg.awakeHyp);
             else if (arg.awakeHyp == 0) {
               callback(404);
@@ -188,6 +287,7 @@ function findOne(host, instances, awake, sleep, callback) {
                   if (!_.isEmpty(array)) {
                     var sort = _.sortBy(array, 'cpuUsage');
                     var first = _.first(array);
+                    //AWAKE HYPERVISOR
                     callback(null, first);
                   } else {
                     callback(null, false);
@@ -215,5 +315,90 @@ function findOne(host, instances, awake, sleep, callback) {
 }
 
 function findLess(host, instances, awake, sleep, callback) {
+  console.log('Entro FindLess');
+  async.eachSeries(instances, function(instance, cb) {
+      async.auto({
+          flavor: function(callback) {
+            compute.getFlavors(function(err, result) {
+              if (err) callback(err);
+              else {
+                flavor = _.findWhere(result, {
+                  name: instance.flavorName
+                });
+                callback(null, flavor);
+              }
+            });
+          },
+          awakeHyp: ['flavor', function(callback, arg) {
+            var array = [];
+            async.eachSeries(awake, function(obj, clbk) {
+              hypervisors.getHypervisorCpuNewVM(obj, instance,
+                function(err, result) {
+                  if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
+                    var push = {};
+                    push.hypervisor = result.f2;
+                    push.instance = instance;
+                    array.push(push);
+                  }
+                  clbk();
+                });
+            }, function(err) {
+              if (err) callback(err);
+              else {
+                if (!_.isEmpty(array)) {
+                  var sort = _.sortBy(array, 'cpuUsage');
+                  var first = _.first(array);
+                  callback(null, first);
+                } else {
+                  callback(null, 1);
+                }
+              }
+            });
+          }],
+        },
+        function(err, result) {
+          if (err) cb(true);
+          else {
+            if (_.isObject(result.awakeHyp)) cb(result.awakeHyp);
+            else cb();
+          }
+        })
+    },
+    function(resultat) {
+      if (_.isObject(resultat)) return callback(null, resultat);
+      else if (_.isNull(resultat)) {
+        async.eachSeries(instances, function(instance, cb) {
+          var array = [];
+          async.eachSeries(sleep, function(obj, clbk) {
+            hypervisors.getHypervisorCpuNewVM(obj, instance,
+              function(err, result) {
+                if (err) clbk(err);
+                if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
+                  var push = {};
+                  push.hypervisor = result.f2;
+                  push.instance = instance;
+                  array.push(push);
+                }
+                clbk();
+              });
+          }, function(err) {
+            if (err) cb(err);
+            else {
+              if (!_.isEmpty(array)) {
+                var sort = _.sortBy(array, 'cpuUsage');
+                var first = _.first(array);
+                //AWAKE HYPERVISOR
+                cb(first);
+              } else {
+                cb(404);
+              }
+            }
+          });
+        }, function(res) {
+          if (_.isObject(res)) return callback(null, res);
+          else return callback(res);
+        });
+      } else return callback(404);
+    });
 
 }
