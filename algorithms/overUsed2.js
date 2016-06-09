@@ -12,15 +12,6 @@ exports.overUsed2 = function(host, callback) {
   async.waterfall([
     function(callback) {
       info(host, function(err, host, instances, awake, sleep) {
-        console.log(err);
-        console.log('*************HOST************************');
-        console.log(host);
-        console.log('++++++++++++++Instances++++++++++++++++++');
-        console.log(instances);
-        console.log('---------------------Awake------------------');
-        console.log(awake);
-        console.log('//////////////////SLEEP//////////////////////');
-        console.log(sleep);
         if (err) callback(err);
         else callback(null, host, instances, awake, sleep);
       });
@@ -29,16 +20,47 @@ exports.overUsed2 = function(host, callback) {
       findMigrate(host, instances, awake, sleep, function(err, result) {
         console.log('%%%%%%%%%%% FIND MIGRATE %%%%%%%%%%%%');
         console.log(result);
-        callback(ERROR.noHypervisorsFound);
-        //  if (err) callback(err);
-        //else callback(null, result);
+        if (err) callback(err);
+        else callback(null, result);
       });
     },
     function(array, callback) {
+      var arr = [];
+      _.each(array, function(object) {
+        if (object.hypervisor.state == 'down') {
+          arr.push(object.hypervisor);
+        }
+      });
+      console.log(arr);
+      if (!_.isEmpty(arr)) {
+        var uniq = _.uniq(arr, true, function(hyp) {
+          return hyp.id;
+        });
+        async.eachSeries(uniq, function(sleeper, cb) {
+          hypervisors.awakeHypervisor(sleeper.name, function(err,
+            result) {
+            if (err) cb(err);
+            else cb();
+          })
+        }, function(err) {
+
+          if (err) callback(err);
+          else {
+            setTimeout(function() {
+              callback(null, array);
+            }, 60000)
+          }
+        });
+      } else {
+        callback(null, array);
+      }
+
+    },
+    function(array, callback) {
       async.eachSeries(array, function(instance, cb) {
-        var instance = instance.instance.id;
-        var hypervisor = instance.hypervisor.name;
-        compute.migrateServer(instance, hypervisor, function(er, res) {
+        var inst = instance.instance.id;
+        var name = instance.hypervisor.name;
+        compute.migrateServer(inst, name, function(er, res) {
           listener.listenerClose('migrationQueue', function(err,
             msg) {
             if (er) cb(er);
@@ -64,18 +86,18 @@ function info(host, callback) {
   async.auto({
       hypervisor: function(callback) {
         hypervisors.getHypervisor(host, function(err, result) {
-          /*  if (err) callback(err);
-            else {
-              if (result.cpuUsage < 60) {
-                console.log('Hypervisor Under 60%');
-                callback({
-                  status: 200,
-                  message: 'Hypervisor Under 60%'
-                });
-              } else {*/
-          callback(null, result);
-          //  }
-          //}
+          if (err) callback(err);
+          else {
+            if (result.cpuUsage < 60) {
+              console.log('Hypervisor Under 60%');
+              callback({
+                status: 200,
+                message: 'Hypervisor Under 60%'
+              });
+            } else {
+              callback(null, result);
+            }
+          }
         });
       },
       instances: ['hypervisor', function(callback, obj) {
