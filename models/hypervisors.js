@@ -57,7 +57,7 @@ exports.hypervisorsDown = function(callback) {
       state: 'down'
     });
     _.each(arr, function(obj) {
-      obj.cpuUsage = 1;
+      obj.cpuUsage = 0;
     })
     callback(null, arr);
   });
@@ -179,8 +179,7 @@ exports.getHypervisorInstancesCpu = function(hypervisor, callback) {
   })
 };
 
-exports.getHypervisorCpuNewVM = function(hypervisor, instance,
-  callback) {
+exports.getHypervisorCpuNewVM = function(hypervisor, instance, callback) {
   async.auto({
     f1: function(callback) {
       compute.getFlavor(instance.flavor, function(err, flavor) {
@@ -189,14 +188,27 @@ exports.getHypervisorCpuNewVM = function(hypervisor, instance,
       })
     },
     f2: ['f1', function(callback, flavor) {
+      var json = {};
       var cpuFlavor = flavor.f1.vcpus * instance.cpuUsage;
       var newCpu = cpuFlavor / hypervisor.vcpus;
-      hypervisor.cpuUsage = hypervisor.cpuUsage + newCpu;
-      hypervisor.vcpusUsed = hypervisor.vcpusUsed + flavor.f1.vcpus;
-      hypervisor.ramUsed = hypervisor.ramUsed + flavor.f1.ram;
-      hypervisor.usedDisk = hypervisor.usedDisk + flavor.f1.disk;
-      console.log('newCpu = ' + hypervisor.cpuUsage);
-      callback(null, hypervisor);
+      json.cpuUsage = hypervisor.cpuUsage + newCpu;
+      json.vcpusUsed = hypervisor.vcpusUsed + flavor.f1.vcpus;
+      json.ramUsed = hypervisor.ramUsed + flavor.f1.ram;
+      json.usedDisk = hypervisor.usedDisk + flavor.f1.disk;
+      json.id = hypervisor.id;
+      json.name = hypervisor.name;
+      json.ip = hypervisor.ip;
+      json.status = hypervisor.status;
+      json.vcpus = hypervisor.vcpus;
+      json.ramFree = hypervisor.ramFree;
+      json.ramTotal = hypervisor.ramTotal;
+      json.ramUsed = hypervisor.ramUsed;
+      json.freeDisk = hypervisor.freeDisk;
+      json.totalDisk = hypervisor.totalDisk;
+      json.usedDisk = hypervisor.usedDisk;
+      json.vmsRunning = hypervisor.vmsRunning + 1;
+      json.state = hypervisor.state;
+      callback(null, json);
     }]
   }, function(err, result) {
     if (err) return callback(err);

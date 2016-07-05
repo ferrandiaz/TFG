@@ -18,9 +18,7 @@ exports.overUsed2 = function(host, callback) {
     },
     function(host, instances, awake, sleep, callback) {
       findMigrate(host, instances, awake, sleep, function(err, result) {
-        console.log('%%%%%%%%%%% FIND MIGRATE %%%%%%%%%%%%');
-        console.log(result);
-        if (err) callback(err);
+        if (err) callback(ERROR.noHypervisorsFound);
         else callback(null, result);
       });
     },
@@ -31,7 +29,6 @@ exports.overUsed2 = function(host, callback) {
           arr.push(object.hypervisor);
         }
       });
-      console.log(arr);
       if (!_.isEmpty(arr)) {
         var uniq = _.uniq(arr, true, function(hyp) {
           return hyp.id;
@@ -43,7 +40,6 @@ exports.overUsed2 = function(host, callback) {
             else cb();
           })
         }, function(err) {
-
           if (err) callback(err);
           else {
             setTimeout(function() {
@@ -100,14 +96,29 @@ function info(host, callback) {
           }
         });
       },
-      instances: ['hypervisor', function(callback, obj) {
+      load: ['hypervisor', function(callback, obj) {
+        telemetry.getStatistics('hardware.cpu.load.1min', host, 1,
+          function(err, statistics) {
+            if (err) callback(err);
+            else callback(null, statistics[0].avg);
+          });
+      }],
+      instances: ['load', function(callback, obj) {
         hypervisors.getHypervisorInstancesCpu(host, function(err,
           result) {
           if (err) callback(err);
-          else callback(null, result);
+          else {
+            if (obj.load >= (obj.hypervisor.vcpus + 1)) {
+              _.each(result, function(instance) {
+                instance.cpuUsage = 100;
+              });
+            }
+            callback(null, result);
+          }
         });
       }],
       cpuOnHost: ['instances', function(callback, obj) {
+        var load = obj.load;
         var array = obj.instances;
         var hypervisor = obj.hypervisor;
         async.each(array, function(instance) {
@@ -134,8 +145,17 @@ function info(host, callback) {
     },
     function(err, result) {
       if (err) callback(err);
-      else callback(null, result.hypervisor, result.cpuOnHost, result.arayHypervisorsUp,
-        result.arayHypervisorsDown);
+      else {
+        if (result.load >= result.hypervisor.vcpus + 1) {
+          var sum = 0;
+          _.each(result.cpuOnHost, function(instance) {
+            sum = sum + instance.cpuOnHost;
+          });
+          result.hypervisor.cpuUsage = sum;
+        }
+        callback(null, result.hypervisor, result.cpuOnHost, result.arayHypervisorsUp,
+          result.arayHypervisorsDown);
+      }
     });
 }
 
@@ -161,16 +181,20 @@ function findMigrate(host, instances, awake, sleep, callback) {
         },
         function(arg, callback) {
           if (!arg) {
-            findLess(host, instances, awake, sleep, function(err, result) {
+            var s = sleep;
+            var i = instances;
+            var h = host;
+            var a = awake;
+            findLess(h, i, a, s, function(err, result) {
               if (err) return callback(err);
               else {
                 async.parallel({
-                  host: function(callback) {
+                  host1: function(callback) {
                     host.cpuUsage = host.cpuUsage - result.instance
                       .cpuOnHost;
                     callback(null, host);
                   },
-                  instances: function(callback) {
+                  instancesF: function(callback) {
                     instances = _.reject(instances, function(
                       instance) {
                       if (instance.id == result.instance.id) {
@@ -179,7 +203,7 @@ function findMigrate(host, instances, awake, sleep, callback) {
                     });
                     callback(null, instances);
                   },
-                  awake: function(callback) {
+                  awaked: function(callback) {
                     var exist = _.findWhere(awake, {
                       id: result.hypervisor.id
                     });
@@ -196,7 +220,7 @@ function findMigrate(host, instances, awake, sleep, callback) {
                     }
                     callback(null, awake);
                   },
-                  sleep: function(callback) {
+                  sleeping: function(callback) {
                     var exist = _.findWhere(awake, {
                       id: result.hypervisor.id
                     });
@@ -210,10 +234,10 @@ function findMigrate(host, instances, awake, sleep, callback) {
                     callback(null, sleep);
                   }
                 }, function(error, resultat) {
-                  host = resultat.host;
-                  instanes = resultat.instances;
-                  awake = resultat.awake;
-                  sleep = resultat.sleep;
+                  host = resultat.host1;
+                  instanes = resultat.instancesF;
+                  awake = resultat.awaked;
+                  sleep = resultat.sleeping;
                   array.push(result);
                   callback(null, true);
                 });
@@ -230,7 +254,6 @@ function findMigrate(host, instances, awake, sleep, callback) {
 
     },
     function(err) {
-      console.log(array);
       if (err) return callback(err);
       else return callback(null, array);
     }
@@ -238,7 +261,6 @@ function findMigrate(host, instances, awake, sleep, callback) {
 }
 
 function findOne(host, instances, awake, sleep, callback) {
-  console.log('HOST: ' + host.cpuUsage);
   async.eachSeries(instances, function(instance, cb) {
       async.auto({
           flavor: function(callback) {
@@ -254,13 +276,11 @@ function findOne(host, instances, awake, sleep, callback) {
           },
           awakeHyp: ['flavor', function(callback, arg) {
             var array = [];
-            console.log("HOST USAGE: " + host.cpuUsage);
             var resultCpu = host.cpuUsage - instance.cpuOnHost;
-            console.log("RESULTCPU: " + resultCpu);
             if (resultCpu < config.maxCPU) {
               async.eachSeries(awake, function(obj, clbk) {
-                console.log(obj.name);
-                hypervisors.getHypervisorCpuNewVM(obj, instance,
+                var hyperV = obj;
+                hypervisors.getHypervisorCpuNewVM(hyperV, instance,
                   function(err, result) {
                     if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
                       var push = {};
@@ -271,22 +291,17 @@ function findOne(host, instances, awake, sleep, callback) {
                     clbk();
                   });
               }, function(err) {
-                if (err) callback(err);
-                else {
-                  if (!_.isEmpty(array)) {
-                    var sort = _.sortBy(array, 'cpuUsage');
-                    var first = _.first(array);
-                    callback(null, first);
-                  } else {
-                    callback(null, 1);
-                  }
+                if (!_.isEmpty(array)) {
+                  var sort = _.sortBy(array, 'cpuUsage');
+                  var first = _.first(array);
+                  callback(null, first);
+                } else {
+                  callback(null, 1);
                 }
               });
             } else callback(null, 0);
           }],
           sleepHyp: ['awakeHyp', function(callback, arg) {
-            console.log('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@');
-            console.log(arg.awakeHyp);
             if (_.isObject(arg.awakeHyp)) callback(null, arg.awakeHyp);
             else if (arg.awakeHyp == 0) {
               callback(404);
@@ -304,16 +319,12 @@ function findOne(host, instances, awake, sleep, callback) {
                     clbk();
                   });
               }, function(err) {
-                if (err) callback(err);
-                else {
-                  if (!_.isEmpty(array)) {
-                    var sort = _.sortBy(array, 'cpuUsage');
-                    var first = _.first(array);
-                    //AWAKE HYPERVISOR
-                    callback(null, first);
-                  } else {
-                    callback(null, false);
-                  }
+                if (!_.isEmpty(array)) {
+                  var sort = _.sortBy(array, 'cpuUsage');
+                  var first = _.first(array);
+                  callback(null, first);
+                } else {
+                  callback(null, false);
                 }
               });
             }
@@ -336,9 +347,11 @@ function findOne(host, instances, awake, sleep, callback) {
 
 }
 
-function findLess(host, instances, awake, sleep, callback) {
-  console.log('Entro FindLess');
-  async.eachSeries(instances, function(instance, cb) {
+function findLess(host, instances, awake, sleeping, callback) {
+  var instan = instances;
+  var awk = awake;
+  var slp = sleeping;
+  async.eachSeries(instan, function(instance, cb) {
       async.auto({
           flavor: function(callback) {
             compute.getFlavors(function(err, result) {
@@ -353,8 +366,9 @@ function findLess(host, instances, awake, sleep, callback) {
           },
           awakeHyp: ['flavor', function(callback, arg) {
             var array = [];
-            async.eachSeries(awake, function(obj, clbk) {
-              hypervisors.getHypervisorCpuNewVM(obj, instance,
+            async.eachSeries(awk, function(obj, clbk) {
+              var hyperV = obj;
+              hypervisors.getHypervisorCpuNewVM(hyperV, instance,
                 function(err, result) {
                   if (parseFloat(result.f2.cpuUsage) < config.maxCPU) {
                     var push = {};
@@ -389,9 +403,11 @@ function findLess(host, instances, awake, sleep, callback) {
     function(resultat) {
       if (_.isObject(resultat)) return callback(null, resultat);
       else if (_.isNull(resultat)) {
-        async.eachSeries(instances, function(instance, cb) {
+        async.eachSeries(instan, function(instance, cb) {
           var array = [];
-          async.eachSeries(sleep, function(obj, clbk) {
+          var sleepHyperv;
+          async.eachSeries(slp, function(obj, clbk) {
+            var sleepHyperv = obj;
             hypervisors.getHypervisorCpuNewVM(obj, instance,
               function(err, result) {
                 if (err) clbk(err);
@@ -407,9 +423,10 @@ function findLess(host, instances, awake, sleep, callback) {
             if (err) cb(err);
             else {
               if (!_.isEmpty(array)) {
-                var sort = _.sortBy(array, 'cpuUsage');
-                var first = _.first(array);
-                //AWAKE HYPERVISOR
+                var sort = _.sortBy(array, function(num) {
+                  return parseInt(num.cpuUsage);
+                });
+                var first = _.first(sort.reverse());
                 cb(first);
               } else {
                 cb(404);
