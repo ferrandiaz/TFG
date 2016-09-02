@@ -2,11 +2,9 @@ var amqp = require('amqplib');
 var async = require('async');
 var alg = require('../algorithms/algorithms');
 exports.listenerClose = function(queue, callback) {
-  console.log('Entro');
   require('amqplib/callback_api')
     .connect('amqp://openstack:openstack@controller:5672//', function(err,
       connection) {
-      console.log('CLOSE');
       async.auto({
         f1: function(callback) {
           if (err) callback(err);
