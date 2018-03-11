@@ -1,0 +1,20 @@
+version: '2'
+
+services:
+  ecostack:
+    build:
+      context: .
+      args:
+        BUILD_ENV: development
+    environment:
+        RABBITMQ: $RABBITMQ
+        USER: $USER
+        PASSWORD: $PASSWORD
+        TENANT_ID: $TENANT_ID
+        AUTH_URL: $AUTH_URL
+        REGION: $REGION
+        ALARM: $ALARM
+    volumes:
+      - ./src:/app/src
+    ports:
+      - 3100:3100

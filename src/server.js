@@ -15,10 +15,10 @@ app.get('/', function(req, res) {
 });
 app.use(router);
 
-var listener = require('./src/listener/listener');
-var compute = require('./src/routes/compute');
-var meters = require('./src/routes/meters');
-var alarm = require('./src/routes/alarm');
+var listener = require('./listener/listener');
+var compute = require('./routes/compute');
+var meters = require('./routes/meters');
+var alarm = require('./routes/alarm');
 var openstack = express.Router();
 
 openstack.route('/server')
